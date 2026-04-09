@@ -4,7 +4,12 @@ import bcrypt from 'bcryptjs';
 import { getAmmanDateString, getAmmanDate } from './utils/timezone.js';
 
 console.log('🌱 Initialization checking...');
-await initializeDatabase();
+try {
+  await initializeDatabase();
+} catch (e) {
+  console.error('FATAL ERROR DURING DB INITIALIZATION:', e);
+  process.exit(1);
+}
 console.log('🌱 Seeding database...\n');
 
 // Seed pickup points (Irbid area)
