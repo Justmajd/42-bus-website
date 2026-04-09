@@ -6,15 +6,47 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-let dbUrl = process.env.TURSO_DATABASE_URL || '';
-// Force native protocol which natively bypasses HTTP routing 400 errors
-if (dbUrl.startsWith('https://')) {
-  dbUrl = dbUrl.replace('https://', 'libsql://');
+function cleanEnvValue(value = '') {
+  return String(value).trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+}
+
+function normalizeTursoUrl(rawUrl) {
+  const cleaned = cleanEnvValue(rawUrl);
+  if (!cleaned) return '';
+
+  // Accept protocol-less hostnames and normalize to libsql://
+  if (!cleaned.includes('://')) {
+    return `libsql://${cleaned.replace(/^\/+|\/+$/g, '')}`;
+  }
+
+  try {
+    const parsed = new URL(cleaned);
+    if (!parsed.hostname) return cleaned;
+
+    // Turso/libsql remote URLs should target the DB host. Drop paths that can cause 400s.
+    return `libsql://${parsed.host}`;
+  } catch {
+    return cleaned;
+  }
+}
+
+const dbUrl = normalizeTursoUrl(
+  process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
+);
+const authToken = cleanEnvValue(
+  process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || ''
+);
+
+if (!dbUrl || !authToken) {
+  const missing = [];
+  if (!dbUrl) missing.push('TURSO_DATABASE_URL');
+  if (!authToken) missing.push('TURSO_AUTH_TOKEN');
+  throw new Error(`Missing required Turso environment variable(s): ${missing.join(', ')}`);
 }
 
 const db = createClient({
   url: dbUrl,
-  authToken: process.env.TURSO_AUTH_TOKEN
+  authToken
 });
 
 // Create tables async
