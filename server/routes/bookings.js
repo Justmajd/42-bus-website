@@ -97,7 +97,7 @@ router.post('/', authenticateToken, async (req, res) => {
         'INSERT INTO bookings (trip_id, user_id, pickup_point_id, status) VALUES (?, ?, ?, \'booked\')',
         [trip_id, userId, pickup_point_id]
       );
-      insertId = result.lastInsertRowid;
+      insertId = Number(result.lastInsertRowid);
     }
   } catch (err) {
     if (err.message.includes('UNIQUE constraint')) {

@@ -219,7 +219,7 @@ router.post('/time-slots', authenticateToken, requireAdmin, async (req, res) => 
       'INSERT OR REPLACE INTO time_slots (hour, label, is_active) VALUES (?, ?, ?)',
       [hour, label, is_active ? 1 : 0]
     );
-    res.json({ id: result.lastInsertRowid, hour, label, is_active });
+    res.json({ id: Number(result.lastInsertRowid), hour, label, is_active });
   } catch (err) {
     res.status(400).json({ error: 'Failed to update time slot.' });
   }

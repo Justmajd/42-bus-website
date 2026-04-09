@@ -50,7 +50,7 @@ export async function createNotification(userId, type, title, message) {
   );
 
   const notif = {
-    id: result.lastInsertRowid,
+    id: Number(result.lastInsertRowid),
     user_id: userId,
     type,
     title,
@@ -76,7 +76,7 @@ export async function broadcastNotification(type, title, message) {
   );
 
   const notif = {
-    id: result.lastInsertRowid,
+    id: Number(result.lastInsertRowid),
     user_id: null,
     type,
     title,

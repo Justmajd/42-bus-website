@@ -35,7 +35,7 @@ router.post('/register', async (req, res) => {
   );
 
   const user = {
-    id: result.lastInsertRowid,
+    id: Number(result.lastInsertRowid),
     email,
     name,
     role: 'student'
