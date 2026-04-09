@@ -28,11 +28,20 @@ export default function AdminDashboard() {
       if (res.ok) {
         const fetchedTrips = await res.json();
         
-        // Active trips (pending, confirmed, started) sorted ascending
-        const active = fetchedTrips.filter(t => ['pending', 'confirmed', 'started'].includes(t.status));
-        active.sort((a, b) => new Date(a.calculated_departure) - new Date(b.calculated_departure));
+        let active = [];
+        let passed = [];
+
+        if (filter === 'completed') {
+          passed = fetchedTrips.filter(t => t.status === 'completed');
+        } else {
+          // If 'all' or any active status, hide completed trips from cluttering the view
+          active = fetchedTrips.filter(t => t.status !== 'completed');
+        }
         
-        setTrips(active);
+        active.sort((a, b) => new Date(a.calculated_departure) - new Date(b.calculated_departure));
+        passed.sort((a, b) => new Date(b.calculated_departure) - new Date(a.calculated_departure));
+        
+        setTrips([...active, ...passed]);
       }
     } catch (err) {
       console.error(err);
@@ -101,8 +110,8 @@ export default function AdminDashboard() {
       {/* Filters */}
       <div className="glass-panel mb-4">
         <div className="flex items-center gap-3" style={{ flexWrap: 'wrap' }}>
-          <div className="tabs" style={{ marginBottom: 0, flex: 1, minWidth: 200 }}>
-            {['all', 'pending', 'confirmed', 'started'].map(s => (
+          <div className="tabs" style={{ marginBottom: 0, flex: 1, minWidth: 200, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+            {['all', 'pending', 'confirmed', 'started', 'completed'].map(s => (
               <button
                 key={s}
                 className={`tab ${filter === s ? 'active' : ''}`}
