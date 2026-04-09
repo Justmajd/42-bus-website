@@ -30,6 +30,25 @@ function normalizeTursoUrl(rawUrl) {
   }
 }
 
+function buildCandidateUrls(rawUrl) {
+  const cleaned = cleanEnvValue(rawUrl);
+  if (!cleaned) return [];
+
+  if (!cleaned.includes('://')) {
+    const host = cleaned.replace(/^\/+|\/+$/g, '');
+    return [`libsql://${host}`, `https://${host}`];
+  }
+
+  try {
+    const parsed = new URL(cleaned);
+    const host = parsed.host;
+    if (!host) return [cleaned];
+    return [cleaned, `libsql://${host}`, `https://${host}`].filter((u, idx, arr) => arr.indexOf(u) === idx);
+  } catch {
+    return [cleaned];
+  }
+}
+
 const dbUrl = normalizeTursoUrl(
   process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
 );
@@ -37,8 +56,16 @@ const authToken = cleanEnvValue(
   process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || ''
 );
 
-let db;
+const candidateUrls = buildCandidateUrls(
+  process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
+);
+if (dbUrl && !candidateUrls.includes(dbUrl)) {
+  candidateUrls.unshift(dbUrl);
+}
+
 let dbInitError = null;
+let activeClient = null;
+let clientInitPromise = null;
 
 if (!dbUrl || !authToken) {
   const missing = [];
@@ -46,34 +73,64 @@ if (!dbUrl || !authToken) {
   if (!authToken) missing.push('TURSO_AUTH_TOKEN');
   dbInitError = new Error(`Missing required Turso environment variable(s): ${missing.join(', ')}`);
   console.error('[DB CONFIG ERROR]', dbInitError.message);
-} else {
+}
+
+async function getClient() {
+  if (dbInitError) {
+    throw dbInitError;
+  }
+
+  if (activeClient) {
+    return activeClient;
+  }
+
+  if (!clientInitPromise) {
+    clientInitPromise = (async () => {
+      let lastErr = null;
+
+      for (const url of candidateUrls) {
+        try {
+          const client = createClient({ url, authToken });
+          await client.execute('SELECT 1');
+          activeClient = client;
+          console.log(`[DB] Connected using ${url.replace(/:\/\/.*@/, '://***@')}`);
+          return activeClient;
+        } catch (err) {
+          lastErr = err;
+          console.error(`[DB CONNECT FAILED] ${url}: ${err.message}`);
+        }
+      }
+
+      throw new Error(lastErr?.message || 'Unable to connect to Turso with all URL variants.');
+    })();
+  }
+
   try {
-    db = createClient({
-      url: dbUrl,
-      authToken
-    });
+    return await clientInitPromise;
   } catch (err) {
-    dbInitError = new Error(`Failed to initialize database client: ${err.message}`);
-    console.error('[DB CLIENT ERROR]', dbInitError.message);
+    dbInitError = err;
+    throw err;
   }
 }
 
-if (!db) {
-  db = {
-    async execute() {
-      throw dbInitError || new Error('Database client unavailable.');
-    },
-    async executeMultiple() {
-      throw dbInitError || new Error('Database client unavailable.');
-    }
-  };
-}
+const db = {
+  async execute(sql, args) {
+    const client = await getClient();
+    return client.execute(sql, args);
+  },
+  async executeMultiple(sql) {
+    const client = await getClient();
+    return client.executeMultiple(sql);
+  }
+};
 
 // Create tables async
 export async function initializeDatabase() {
   if (dbInitError) {
     throw dbInitError;
   }
+
+  await getClient();
 
   await db.executeMultiple(`
   CREATE TABLE IF NOT EXISTS users (
