@@ -142,7 +142,15 @@ async function getClient() {
 const db = {
   async execute(sql, args) {
     const client = await getClient();
-    return client.execute(sql, args);
+
+    if (typeof sql === 'string') {
+      if (Array.isArray(args)) {
+        return client.execute({ sql, args });
+      }
+      return client.execute(sql);
+    }
+
+    return client.execute(sql);
   },
   async executeMultiple(sql) {
     const client = await getClient();
