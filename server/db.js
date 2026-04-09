@@ -37,20 +37,44 @@ const authToken = cleanEnvValue(
   process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || ''
 );
 
+let db;
+let dbInitError = null;
+
 if (!dbUrl || !authToken) {
   const missing = [];
   if (!dbUrl) missing.push('TURSO_DATABASE_URL');
   if (!authToken) missing.push('TURSO_AUTH_TOKEN');
-  throw new Error(`Missing required Turso environment variable(s): ${missing.join(', ')}`);
+  dbInitError = new Error(`Missing required Turso environment variable(s): ${missing.join(', ')}`);
+  console.error('[DB CONFIG ERROR]', dbInitError.message);
+} else {
+  try {
+    db = createClient({
+      url: dbUrl,
+      authToken
+    });
+  } catch (err) {
+    dbInitError = new Error(`Failed to initialize database client: ${err.message}`);
+    console.error('[DB CLIENT ERROR]', dbInitError.message);
+  }
 }
 
-const db = createClient({
-  url: dbUrl,
-  authToken
-});
+if (!db) {
+  db = {
+    async execute() {
+      throw dbInitError || new Error('Database client unavailable.');
+    },
+    async executeMultiple() {
+      throw dbInitError || new Error('Database client unavailable.');
+    }
+  };
+}
 
 // Create tables async
 export async function initializeDatabase() {
+  if (dbInitError) {
+    throw dbInitError;
+  }
+
   await db.executeMultiple(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
