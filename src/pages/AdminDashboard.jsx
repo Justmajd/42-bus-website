@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Bus, Users, Clock, Calendar, ArrowRight, ArrowLeft,
-  CheckCircle, Play, Flag, Eye, TrendingUp
+  CheckCircle, Play, Flag, Eye
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';

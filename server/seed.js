@@ -43,7 +43,7 @@ try {
   await initializeDatabase();
 } catch (e) {
   console.error('❌ FATAL ERROR DURING DB INITIALIZATION:', e.message);
-  setTimeout(() => process.exit(1), 500);
+  process.exit(1);
 }
 console.log('🌱 Seeding database...\n');
 

@@ -46,6 +46,14 @@ app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => 
   res.json({ qr_data_url: qrDataUrl, qr_token: trip.qr_token });
 });
 
+// Serve frontend in production environments
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// Fallback all unhandled routes to React's index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
 // Start server
 import { initializeDatabase } from './db.js';
 
