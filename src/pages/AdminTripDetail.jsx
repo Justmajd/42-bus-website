@@ -98,17 +98,15 @@ export default function AdminTripDetail() {
       <div className="glass-panel mb-4 animate-in">
         <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               {trip.direction === 'to_42' ? (
-                <>
-                  <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>PICKUP TO 42</span>
-                  <span style={{ color: 'var(--accent-blue)' }}><ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Point → 42</span>
-                </>
+                  <span className="badge badge-success" style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+                    <ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> PICKUP TO 42
+                  </span>
               ) : (
-                <>
-                  <span className="badge badge-warning" style={{ fontSize: '0.75rem', padding: '2px 8px', backgroundColor: 'var(--accent-amber)', color: '#000' }}>DROP OFF FROM 42</span>
-                  <span style={{ color: 'var(--accent-blue)' }}><ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> 42 → Point</span>
-                </>
+                  <span className="badge badge-warning" style={{ fontSize: '0.8rem', padding: '4px 10px', backgroundColor: 'var(--accent-amber)', color: '#000' }}>
+                    <ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> DROP OFF FROM 42
+                  </span>
               )}
             </div>
             <h1 className="flex items-center gap-2" style={{ marginBottom: 4 }}>

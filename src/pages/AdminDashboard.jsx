@@ -30,13 +30,9 @@ export default function AdminDashboard() {
         
         // Active trips (pending, confirmed, started) sorted ascending
         const active = fetchedTrips.filter(t => ['pending', 'confirmed', 'started'].includes(t.status));
-        // Completed sorting descending (newest completed first)
-        const passed = fetchedTrips.filter(t => !['pending', 'confirmed', 'started'].includes(t.status));
-        
         active.sort((a, b) => new Date(a.calculated_departure) - new Date(b.calculated_departure));
-        passed.sort((a, b) => new Date(b.calculated_departure) - new Date(a.calculated_departure));
         
-        setTrips([...active, ...passed]);
+        setTrips(active);
       }
     } catch (err) {
       console.error(err);
@@ -140,17 +136,15 @@ export default function AdminDashboard() {
             <div key={trip.id} className="trip-card animate-in">
               <div className="trip-card-header">
                 <div>
-                  <div className="trip-direction" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <div className="trip-direction" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
                     {trip.direction === 'to_42' ? (
-                      <>
-                        <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>PICKUP TO 42</span>
-                        <span><ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Point → 42</span>
-                      </>
+                        <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '4px 10px' }}>
+                          <ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> PICKUP TO 42
+                        </span>
                     ) : (
-                      <>
-                        <span className="badge badge-warning" style={{ fontSize: '0.75rem', padding: '2px 8px', backgroundColor: 'var(--accent-amber)', color: '#000' }}>DROP OFF FROM 42</span>
-                        <span><ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> 42 → Point</span>
-                      </>
+                        <span className="badge badge-warning" style={{ fontSize: '0.75rem', padding: '4px 10px', backgroundColor: 'var(--accent-amber)', color: '#000' }}>
+                          <ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> DROP OFF FROM 42
+                        </span>
                     )}
                   </div>
                   <div className="trip-time">
