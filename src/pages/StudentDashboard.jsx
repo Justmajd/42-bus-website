@@ -164,7 +164,7 @@ export default function StudentDashboard() {
           className={`tab ${activeTab === 'from_42' ? 'active' : ''}`}
           onClick={() => setActiveTab('from_42')}
         >
-          <ArrowLeft size={16} /> 42 → Point
+          <MapPin size={16} /> 42 → Point
         </button>
       </div>
 
