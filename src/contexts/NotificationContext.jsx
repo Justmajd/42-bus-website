@@ -4,6 +4,18 @@ import { API_BASE, getSSEUrl } from '../api';
 
 const NotificationContext = createContext(null);
 
+function safeParseSSEData(rawData) {
+  if (typeof rawData !== 'string') return null;
+  const value = rawData.trim();
+  if (!value) return null;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
 export function NotificationProvider({ children }) {
   const { token, user } = useAuth();
   const [notifications, setNotifications] = useState([]);
@@ -28,23 +40,27 @@ export function NotificationProvider({ children }) {
     };
 
     es.addEventListener('notification', (event) => {
-      const data = JSON.parse(event.data);
+      const data = safeParseSSEData(event.data);
+      if (!data) return;
       setNotifications(prev => [data, ...prev]);
       setUnreadCount(prev => prev + 1);
     });
 
     es.addEventListener('seat_update', (event) => {
-      const data = JSON.parse(event.data);
+      const data = safeParseSSEData(event.data);
+      if (!data) return;
       setSeatUpdates(prev => ({ ...prev, [data.trip_id]: data }));
     });
 
     es.addEventListener('trip_update', (event) => {
-      const data = JSON.parse(event.data);
+      const data = safeParseSSEData(event.data);
+      if (!data) return;
       setTripUpdates(data);
     });
 
     es.addEventListener('attendance_update', (event) => {
-      const data = JSON.parse(event.data);
+      const data = safeParseSSEData(event.data);
+      if (!data) return;
       setTripUpdates(prev => ({ ...prev, ...data }));
     });
 
