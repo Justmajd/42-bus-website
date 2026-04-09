@@ -32,7 +32,8 @@ export default function AdminDashboard() {
         let passed = [];
 
         if (filter === 'completed') {
-          passed = fetchedTrips.filter(t => t.status === 'completed');
+          // Only show completed trips that actually had students booked
+          passed = fetchedTrips.filter(t => t.status === 'completed' && (t.seats_booked || 0) > 0);
         } else {
           // If 'all' or any active status, hide completed trips from cluttering the view
           active = fetchedTrips.filter(t => t.status !== 'completed');
