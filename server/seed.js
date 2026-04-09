@@ -4,14 +4,26 @@ import bcrypt from 'bcryptjs';
 import { getAmmanDateString, getAmmanDate } from './utils/timezone.js';
 
 console.log('🌱 Initialization checking...');
-try {
-  console.log('📡 Testing connection to Turso...');
-  await db.execute('SELECT 1');
-  console.log('✅ Connection test successful.');
-} catch (e) {
-  console.error('❌ Connection test failed:', e.message);
-  setTimeout(() => process.exit(1), 500);
+async function testConnection() {
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      console.log('📡 Testing connection to Turso...');
+      await db.execute('SELECT 1');
+      console.log('✅ Connection test successful.');
+      return;
+    } catch (e) {
+      console.error(`❌ Connection test failed (${retries} retries left):`, e.message);
+      retries -= 1;
+      if (retries === 0) {
+        console.error('❌ FATAL: Could not connect to Turso database after multiple attempts. Aborting.');
+        process.exit(1);
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+    }
+  }
 }
+await testConnection();
 
 try {
   console.log('🧹 Pruning previous duplicates to prepare for strict mode...');
