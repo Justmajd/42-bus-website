@@ -47,12 +47,12 @@ try {
 }
 console.log('🌱 Seeding database...\n');
 
-// Seed pickup points (Irbid area)
+// Seed actual pickup points (Irbid coordinates matching reality)
 const pickupPoints = [
-  { name: 'Al-Mal Street', lat: 32.5558, lng: 35.8508, order_index: 1, eta_minutes: 0 },
-  { name: 'University Street', lat: 32.5520, lng: 35.8620, order_index: 2, eta_minutes: 8 },
-  { name: 'City Center', lat: 32.5500, lng: 35.8450, order_index: 3, eta_minutes: 15 },
-  { name: 'Al-Husn Junction', lat: 32.5350, lng: 35.8300, order_index: 4, eta_minutes: 22 },
+  { name: 'المجمع الشمالي', lat: 32.56802982426975, lng: 35.855675875688576, order_index: 1, eta_minutes: 0 },
+  { name: 'الحي الشرقي', lat: 32.55398159822269, lng: 35.867237768419514, order_index: 2, eta_minutes: 8 },
+  { name: 'مجمع الشيخ خليل', lat: 32.550117146365146, lng: 35.855572864769265, order_index: 3, eta_minutes: 15 },
+  { name: 'مجمع عمان الجديد', lat: 32.5350833459638, lng: 35.86965088164056, order_index: 4, eta_minutes: 22 },
 ];
 
 const existingPointsRes = await db.execute('SELECT COUNT(*) as count FROM pickup_points');
@@ -65,7 +65,13 @@ if (existingPointsRes.rows[0].count === 0) {
   }
   console.log('✅ Pickup points seeded');
 } else {
-  console.log('⏭️  Pickup points already exist');
+  console.log('🔄  Updating existing pickup points with new Arabic locations...');
+  for (const point of pickupPoints) {
+    await db.execute(`
+      UPDATE pickup_points SET name = ?, lat = ?, lng = ? WHERE order_index = ?
+    `, [point.name, point.lat, point.lng, point.order_index]);
+  }
+  console.log('✅ Pickup points fully synced to proper coordinates');
 }
 
 // Seed time slots (9 AM to 3 PM)
