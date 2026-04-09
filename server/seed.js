@@ -5,10 +5,20 @@ import { getAmmanDateString, getAmmanDate } from './utils/timezone.js';
 
 console.log('🌱 Initialization checking...');
 try {
+  console.log('📡 Testing connection to Turso...');
+  await db.execute('SELECT 1');
+  console.log('✅ Connection test successful.');
+} catch (e) {
+  console.error('❌ Connection test failed:', e.message);
+  setTimeout(() => process.exit(1), 500);
+}
+
+try {
+  console.log('🏗️ Building tables...');
   await initializeDatabase();
 } catch (e) {
-  console.error('FATAL ERROR DURING DB INITIALIZATION:', e);
-  process.exit(1);
+  console.error('❌ FATAL ERROR DURING DB INITIALIZATION:', e.message);
+  setTimeout(() => process.exit(1), 500);
 }
 console.log('🌱 Seeding database...\n');
 
