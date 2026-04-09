@@ -40,7 +40,7 @@ function createNumberedIcon(count, color = '#3b82f6') {
 }
 
 export default function MapView({ pickupStats = [], height = 350 }) {
-  const center = [32.5532, 35.8500]; // 42 campus area
+  const center = [32.504136859235835, 35.8708342993484]; // 42 campus area
 
   if (pickupStats.length === 0) return null;
 
