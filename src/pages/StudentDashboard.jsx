@@ -32,7 +32,7 @@ export default function StudentDashboard() {
       const tomorrowStr = getAmmanDateString(tomorrow);
 
       const [tripsRes, bookingsRes, pointsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/trips?direction=${activeTab}${activeTab === 'to_42' ? `&date=${tomorrowStr}` : `&date=${todayStr}`}`, { headers }),
+        fetch(`${API_BASE}/api/trips?direction=${activeTab}`, { headers }),
         fetch(`${API_BASE}/api/bookings`, { headers }),
         fetch(`${API_BASE}/api/trips/config/pickup-points`, { headers })
       ]);
