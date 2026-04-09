@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Clock, Calendar, Users, MapPin, QrCode,
+  ArrowLeft, ArrowRight, Clock, Calendar, Users, MapPin, QrCode,
   CheckCircle, Play, Flag, User, AlertTriangle
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
