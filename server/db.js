@@ -6,8 +6,14 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
+let dbUrl = process.env.TURSO_DATABASE_URL || '';
+// Force native protocol which natively bypasses HTTP routing 400 errors
+if (dbUrl.startsWith('https://')) {
+  dbUrl = dbUrl.replace('https://', 'libsql://');
+}
+
 const db = createClient({
-  url: process.env.TURSO_DATABASE_URL,
+  url: dbUrl,
   authToken: process.env.TURSO_AUTH_TOKEN
 });
 
