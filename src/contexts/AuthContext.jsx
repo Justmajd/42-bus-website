@@ -3,6 +3,25 @@ import { API_BASE } from '../api';
 
 const AuthContext = createContext(null);
 
+async function parseApiResponse(res) {
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+
+  if (isJson) {
+    return res.json();
+  }
+
+  const raw = await res.text();
+  let details = raw.trim();
+  if (details.startsWith('<')) {
+    details = 'The server returned HTML instead of JSON. Check API URL/proxy configuration.';
+  } else if (!details) {
+    details = 'Empty response from server.';
+  }
+
+  throw new Error(details);
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('auth_token'));
@@ -17,9 +36,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (token) {
       fetch(`${API_BASE}/api/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error('Invalid token');
+        .then(async (res) => {
+          const data = await parseApiResponse(res);
+          if (!res.ok) {
+            throw new Error(data?.error || 'Invalid token');
+          }
+          return data;
         })
         .then(userData => {
           setUser(userData);
@@ -42,8 +64,8 @@ export function AuthProvider({ children }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await parseApiResponse(res);
+    if (!res.ok) throw new Error(data?.error || 'Login failed');
     
     localStorage.setItem('auth_token', data.token);
     setToken(data.token);
@@ -57,8 +79,8 @@ export function AuthProvider({ children }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await parseApiResponse(res);
+    if (!res.ok) throw new Error(data?.error || 'Registration failed');
     
     localStorage.setItem('auth_token', data.token);
     setToken(data.token);
@@ -77,7 +99,7 @@ export function AuthProvider({ children }) {
     try {
       const res = await fetch(`${API_BASE}/api/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (res.ok) {
-        const userData = await res.json();
+        const userData = await parseApiResponse(res);
         setUser(userData);
       }
     } catch (err) {
