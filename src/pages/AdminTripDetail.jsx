@@ -1,0 +1,257 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Clock, Calendar, Users, MapPin, QrCode,
+  CheckCircle, Play, Flag, User, AlertTriangle
+} from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import MapView from '../components/MapView';
+import { API_BASE } from '../api';
+
+export default function AdminTripDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { token } = useAuth();
+  const { tripUpdates } = useNotifications();
+  const [trip, setTrip] = useState(null);
+  const [qrData, setQrData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const fetchTrip = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/trips/${id}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setTrip(data);
+        // Fetch QR if started
+        if (data.status === 'started') {
+          fetchQR();
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchQR = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/qr/${id}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setQrData(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => { fetchTrip(); }, [id]);
+  useEffect(() => { if (tripUpdates) fetchTrip(); }, [tripUpdates]);
+
+  const updateStatus = async (status) => {
+    const confirmMsg = status === 'completed'
+      ? 'Complete this trip? Students who did not attend will receive a no-show warning.'
+      : `Set trip status to "${status}"?`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/trips/${id}/status`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        fetchTrip();
+        if (status === 'started') fetchQR();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (loading) {
+    return <div className="loading-spinner"><div className="spinner"></div></div>;
+  }
+
+  if (!trip) {
+    return (
+      <div className="page-content container">
+        <p>Trip not found.</p>
+      </div>
+    );
+  }
+
+  const attendedCount = trip.bookings?.filter(b => b.status === 'attended').length || 0;
+
+  return (
+    <div className="page-content container">
+      <button className="back-button" onClick={() => navigate(-1)}>
+        <ArrowLeft size={16} /> Back to Dashboard
+      </button>
+
+      {/* Trip Header */}
+      <div className="glass-panel mb-4 animate-in">
+        <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--accent-blue)', fontWeight: 600, marginBottom: 4 }}>
+              {trip.direction === 'to_42' ? 'Point → 42' : '42 → Point'}
+            </div>
+            <h1 className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+              <Clock size={24} /> {trip.time_label}
+            </h1>
+            <div className="flex items-center gap-2 text-muted">
+              <Calendar size={14} /> {trip.date}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`badge badge-${trip.status}`} style={{ fontSize: '0.85rem', padding: '6px 14px' }}>
+              <span className={`status-dot ${trip.status}`}></span>
+              {trip.status.toUpperCase()}
+            </span>
+          </div>
+        </div>
+
+        {/* Stats Row */}
+        <div className="admin-stats" style={{ marginTop: 20, marginBottom: 0 }}>
+          <div className="admin-stat-card">
+            <div className="admin-stat-value" style={{ color: 'var(--accent-blue)' }}>{trip.seats_booked || 0}</div>
+            <div className="admin-stat-label">Booked</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-value" style={{ color: 'var(--accent-emerald)' }}>{attendedCount}</div>
+            <div className="admin-stat-label">Attended</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-value">{trip.seats_available}</div>
+            <div className="admin-stat-label">Available</div>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-value">{trip.seats_total}</div>
+            <div className="admin-stat-label">Capacity</div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 mt-4">
+          {trip.status === 'pending' && (
+            <button className="btn btn-primary" onClick={() => updateStatus('confirmed')}>
+              <CheckCircle size={16} /> Confirm Trip
+            </button>
+          )}
+          {trip.status === 'confirmed' && (
+            <button className="btn btn-success" onClick={() => updateStatus('started')}>
+              <Play size={16} /> Start Trip
+            </button>
+          )}
+          {trip.status === 'started' && (
+            <button className="btn btn-warning" onClick={() => updateStatus('completed')}>
+              <Flag size={16} /> Complete Trip
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid-2">
+        <div>
+          {/* QR Code */}
+          {trip.status === 'started' && (
+            <div className="glass-panel mb-4 animate-in">
+              <h2 className="flex items-center gap-2">
+                <QrCode size={20} /> Attendance QR Code
+              </h2>
+              {qrData ? (
+                <div className="qr-container">
+                  <img src={qrData.qr_data_url} alt="Trip QR Code" className="qr-image" />
+                  <p className="qr-label">
+                    Students scan this code to confirm attendance
+                  </p>
+                </div>
+              ) : (
+                <div className="loading-spinner"><div className="spinner"></div></div>
+              )}
+            </div>
+          )}
+
+          {/* Pickup Points */}
+          <div className="glass-panel mb-4 animate-in">
+            <h2 className="flex items-center gap-2">
+              <MapPin size={20} /> Pickup Points
+            </h2>
+            <div className="pickup-grid">
+              {trip.pickup_stats?.map(point => (
+                <div key={point.id} className="pickup-card">
+                  <div className="pickup-name">{point.name}</div>
+                  <div className="pickup-count">{point.student_count}</div>
+                  <div className="pickup-label">Students</div>
+                  <div className="pickup-eta">
+                    <Clock size={12} /> {point.eta_minutes} min
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Map */}
+          {trip.pickup_stats && (
+            <div className="glass-panel animate-in">
+              <h2 className="flex items-center gap-2">
+                <MapPin size={20} /> Map
+              </h2>
+              <MapView pickupStats={trip.pickup_stats} height={400} />
+            </div>
+          )}
+        </div>
+
+        {/* Student List */}
+        <div>
+          <div className="glass-panel animate-in">
+            <h2 className="flex items-center gap-2">
+              <Users size={20} /> Students ({trip.bookings?.length || 0})
+            </h2>
+
+            {!trip.bookings || trip.bookings.length === 0 ? (
+              <div className="empty-state">
+                <Users size={40} />
+                <p>No students booked</p>
+              </div>
+            ) : (
+              <div className="student-list">
+                {trip.bookings.map(booking => (
+                  <div key={booking.id} className="student-row">
+                    <div className="flex items-center gap-2" style={{ flex: 1 }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: booking.status === 'attended'
+                          ? 'linear-gradient(135deg, var(--accent-emerald), #059669)'
+                          : 'var(--bg-primary)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.7rem', fontWeight: 700, color: 'white', flexShrink: 0
+                      }}>
+                        {booking.status === 'attended' ? <CheckCircle size={14} /> : <User size={14} />}
+                      </div>
+                      <div>
+                        <div className="student-row-name">{booking.student_name}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{booking.student_email}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="student-row-pickup">{booking.pickup_name}</span>
+                      <span className={`badge badge-${booking.status === 'attended' ? 'success' : booking.status === 'no_show' ? 'danger' : 'pending'}`}>
+                        {booking.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
