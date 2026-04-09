@@ -50,7 +50,7 @@ app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => 
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // Fallback all unhandled routes to React's index.html
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
