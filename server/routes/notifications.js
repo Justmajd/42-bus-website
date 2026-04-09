@@ -42,38 +42,38 @@ router.get('/stream', (req, res) => {
 });
 
 // Get user notifications
-router.get('/', authenticateToken, (req, res) => {
-  const notifications = db.prepare(`
+router.get('/', authenticateToken, async (req, res) => {
+  const notificationsRes = await db.execute(`
     SELECT * FROM notifications 
     WHERE user_id = ? OR user_id IS NULL 
     ORDER BY created_at DESC 
     LIMIT 50
-  `).all(req.user.id);
+  `, [req.user.id]);
 
-  res.json(notifications);
+  res.json(notificationsRes.rows);
 });
 
 // Get unread count
-router.get('/unread-count', authenticateToken, (req, res) => {
-  const result = db.prepare(`
+router.get('/unread-count', authenticateToken, async (req, res) => {
+  const result = await db.execute(`
     SELECT COUNT(*) as count FROM notifications 
     WHERE (user_id = ? OR user_id IS NULL) AND is_read = 0
-  `).get(req.user.id);
+  `, [req.user.id]);
 
-  res.json({ count: result.count });
+  res.json({ count: result.rows[0].count });
 });
 
 // Mark as read
-router.patch('/:id/read', authenticateToken, (req, res) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND (user_id = ? OR user_id IS NULL)').run(
+router.patch('/:id/read', authenticateToken, async (req, res) => {
+  await db.execute('UPDATE notifications SET is_read = 1 WHERE id = ? AND (user_id = ? OR user_id IS NULL)', [
     req.params.id, req.user.id
-  );
+  ]);
   res.json({ message: 'Marked as read.' });
 });
 
 // Mark all as read
-router.patch('/read-all', authenticateToken, (req, res) => {
-  db.prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ? OR user_id IS NULL').run(req.user.id);
+router.patch('/read-all', authenticateToken, async (req, res) => {
+  await db.execute('UPDATE notifications SET is_read = 1 WHERE user_id = ? OR user_id IS NULL', [req.user.id]);
   res.json({ message: 'All notifications marked as read.' });
 });
 

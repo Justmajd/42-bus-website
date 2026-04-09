@@ -1,18 +1,19 @@
-import Database from 'better-sqlite3';
+import { createClient } from '@libsql/client';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, 'bus_booking.db');
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
-const db = new Database(dbPath);
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN
+});
 
-// Enable WAL mode for better performance
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-// Create tables
-db.exec(`
+// Create tables async
+export async function initializeDatabase() {
+  await db.executeMultiple(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
@@ -81,8 +82,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_trips_direction ON trips(direction);
   CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
   CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
-  CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
-`);
+  `);
+}
 
 export default db;

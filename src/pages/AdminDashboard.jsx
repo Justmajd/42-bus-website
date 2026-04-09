@@ -25,7 +25,19 @@ export default function AdminDashboard() {
       if (dateFilter) url += `date=${dateFilter}&`;
       
       const res = await fetch(url, { headers });
-      if (res.ok) setTrips(await res.json());
+      if (res.ok) {
+        const fetchedTrips = await res.json();
+        
+        // Active trips (pending, confirmed, started) sorted ascending
+        const active = fetchedTrips.filter(t => ['pending', 'confirmed', 'started'].includes(t.status));
+        // Completed sorting descending (newest completed first)
+        const passed = fetchedTrips.filter(t => !['pending', 'confirmed', 'started'].includes(t.status));
+        
+        active.sort((a, b) => new Date(a.calculated_departure) - new Date(b.calculated_departure));
+        passed.sort((a, b) => new Date(b.calculated_departure) - new Date(a.calculated_departure));
+        
+        setTrips([...active, ...passed]);
+      }
     } catch (err) {
       console.error(err);
     } finally {

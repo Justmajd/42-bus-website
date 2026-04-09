@@ -7,7 +7,8 @@ import { JWT_SECRET, authenticateToken } from '../middleware/auth.js';
 const router = Router();
 
 // Register
-router.post('/register', (req, res) => {
+// Register
+router.post('/register', async (req, res) => {
   const { email, password, name } = req.body;
 
   if (!email || !password || !name) {
@@ -21,16 +22,17 @@ router.post('/register', (req, res) => {
   }
 
   // Check if user already exists
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-  if (existing) {
+  const existingRes = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+  if (existingRes.rows.length > 0) {
     return res.status(409).json({ error: 'An account with this email already exists.' });
   }
 
   // Hash password and create user
   const passwordHash = bcrypt.hashSync(password, 10);
-  const result = db.prepare(
-    'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)'
-  ).run(email, passwordHash, name, 'student');
+  const result = await db.execute(
+    'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
+    [email, passwordHash, name, 'student']
+  );
 
   const user = {
     id: result.lastInsertRowid,
@@ -45,14 +47,15 @@ router.post('/register', (req, res) => {
 });
 
 // Login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const userRes = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+  const user = userRes.rows[0];
   if (!user) {
     return res.status(401).json({ error: 'Invalid email or password.' });
   }
@@ -82,10 +85,12 @@ router.post('/login', (req, res) => {
 });
 
 // Get current user profile
-router.get('/me', authenticateToken, (req, res) => {
-  const user = db.prepare(
-    'SELECT id, email, name, role, warnings, banned_until, created_at FROM users WHERE id = ?'
-  ).get(req.user.id);
+router.get('/me', authenticateToken, async (req, res) => {
+  const userRes = await db.execute(
+    'SELECT id, email, name, role, warnings, banned_until, created_at FROM users WHERE id = ?',
+    [req.user.id]
+  );
+  const user = userRes.rows[0];
 
   if (!user) {
     return res.status(404).json({ error: 'User not found.' });

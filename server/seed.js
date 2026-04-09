@@ -1,6 +1,10 @@
+import { initializeDatabase } from './db.js';
 import db from './db.js';
 import bcrypt from 'bcryptjs';
+import { getAmmanDateString, getAmmanDate } from './utils/timezone.js';
 
+console.log('🌱 Initialization checking...');
+await initializeDatabase();
 console.log('🌱 Seeding database...\n');
 
 // Seed pickup points (Irbid area)
@@ -11,15 +15,13 @@ const pickupPoints = [
   { name: 'Al-Husn Junction', lat: 32.5350, lng: 35.8300, order_index: 4, eta_minutes: 22 },
 ];
 
-const insertPoint = db.prepare(`
-  INSERT OR IGNORE INTO pickup_points (name, lat, lng, order_index, eta_minutes) 
-  VALUES (@name, @lat, @lng, @order_index, @eta_minutes)
-`);
-
-const existingPoints = db.prepare('SELECT COUNT(*) as count FROM pickup_points').get();
-if (existingPoints.count === 0) {
+const existingPointsRes = await db.execute('SELECT COUNT(*) as count FROM pickup_points');
+if (existingPointsRes.rows[0].count === 0) {
   for (const point of pickupPoints) {
-    insertPoint.run(point);
+    await db.execute(`
+      INSERT INTO pickup_points (name, lat, lng, order_index, eta_minutes) 
+      VALUES (?, ?, ?, ?, ?)
+    `, [point.name, point.lat, point.lng, point.order_index, point.eta_minutes]);
   }
   console.log('✅ Pickup points seeded');
 } else {
@@ -36,15 +38,13 @@ const timeSlots = [
   { hour: 14, label: '2:00 - 3:00' },
 ];
 
-const insertSlot = db.prepare(`
-  INSERT OR IGNORE INTO time_slots (hour, label, is_active) 
-  VALUES (@hour, @label, 1)
-`);
-
-const existingSlots = db.prepare('SELECT COUNT(*) as count FROM time_slots').get();
-if (existingSlots.count === 0) {
+const existingSlotsRes = await db.execute('SELECT COUNT(*) as count FROM time_slots');
+if (existingSlotsRes.rows[0].count === 0) {
   for (const slot of timeSlots) {
-    insertSlot.run(slot);
+    await db.execute(`
+      INSERT INTO time_slots (hour, label, is_active) 
+      VALUES (?, ?, 1)
+    `, [slot.hour, slot.label]);
   }
   console.log('✅ Time slots seeded');
 } else {
@@ -53,51 +53,55 @@ if (existingSlots.count === 0) {
 
 // Seed admin/driver account
 const adminEmail = 'driver@learner.42.tech';
-const existingAdmin = db.prepare('SELECT id FROM users WHERE email = ?').get(adminEmail);
-if (!existingAdmin) {
+const existingAdminRes = await db.execute('SELECT id FROM users WHERE email = ?', [adminEmail]);
+if (!existingAdminRes.rows[0]) {
   const hash = bcrypt.hashSync('driver123', 10);
-  db.prepare(`
+  await db.execute(`
     INSERT INTO users (email, password_hash, name, role) 
     VALUES (?, ?, ?, 'admin')
-  `).run(adminEmail, hash, 'Bus Driver');
+  `, [adminEmail, hash, 'Bus Driver']);
   console.log('✅ Admin account seeded (driver@learner.42.tech / driver123)');
 } else {
   console.log('⏭️  Admin account already exists');
 }
 
-// Seed initial trips for today and tomorrow
-const today = new Date().toISOString().split('T')[0];
-const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+// Seed initial trips for today and tomorrow using Amman logic
+const todayStr = getAmmanDateString();
+const tomorrow = getAmmanDate();
+tomorrow.setDate(tomorrow.getDate() + 1);
+const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-const slots = db.prepare('SELECT * FROM time_slots WHERE is_active = 1').all();
-const existingTrips = db.prepare('SELECT COUNT(*) as count FROM trips').get();
+const slotsRes = await db.execute('SELECT * FROM time_slots WHERE is_active = 1');
+const slots = slotsRes.rows;
+const existingTripsRes = await db.execute('SELECT COUNT(*) as count FROM trips');
 
-if (existingTrips.count === 0) {
-  const insertTrip = db.prepare(`
-    INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status)
-    VALUES (@direction, @date, @time_slot_id, @calculated_departure, @status)
-  `);
-
+if (existingTripsRes.rows[0].count === 0) {
   for (const slot of slots) {
     // Tomorrow's to_42 trips
-    insertTrip.run({
-      direction: 'to_42',
-      date: tomorrow,
-      time_slot_id: slot.id,
-      calculated_departure: `${tomorrow}T${String(slot.hour).padStart(2, '0')}:00:00`,
-      status: 'pending'
-    });
+    await db.execute(`
+      INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status)
+      VALUES (?, ?, ?, ?, ?)
+    `, [
+      'to_42', 
+      tomorrowStr, 
+      slot.id, 
+      `${tomorrowStr}T${String(slot.hour).padStart(2, '0')}:00:00+03:00`, 
+      'pending'
+    ]);
   }
 
   // Today's from_42 trips
   for (const slot of slots) {
-    insertTrip.run({
-      direction: 'from_42',
-      date: today,
-      time_slot_id: slot.id,
-      calculated_departure: `${today}T${String(slot.hour).padStart(2, '0')}:00:00`,
-      status: 'pending'
-    });
+    await db.execute(`
+      INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status)
+      VALUES (?, ?, ?, ?, ?)
+    `, [
+      'from_42', 
+      todayStr, 
+      slot.id, 
+      `${todayStr}T${String(slot.hour).padStart(2, '0')}:00:00+03:00`, 
+      'pending'
+    ]);
   }
 
   console.log('✅ Initial trips seeded');
@@ -106,3 +110,4 @@ if (existingTrips.count === 0) {
 }
 
 console.log('\n🎉 Seed complete!');
+process.exit(0);

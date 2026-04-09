@@ -43,10 +43,11 @@ export function notifyUser(userId, event, data) {
 }
 
 // Create persistent notification + push via SSE
-export function createNotification(userId, type, title, message) {
-  const result = db.prepare(
-    'INSERT INTO notifications (user_id, type, title, message) VALUES (?, ?, ?, ?)'
-  ).run(userId, type, title, message);
+export async function createNotification(userId, type, title, message) {
+  const result = await db.execute(
+    'INSERT INTO notifications (user_id, type, title, message) VALUES (?, ?, ?, ?)',
+    [userId, type, title, message]
+  );
 
   const notif = {
     id: result.lastInsertRowid,
@@ -68,10 +69,11 @@ export function createNotification(userId, type, title, message) {
 }
 
 // Broadcast notification to ALL users (saved with null user_id)
-export function broadcastNotification(type, title, message) {
-  const result = db.prepare(
-    'INSERT INTO notifications (user_id, type, title, message) VALUES (NULL, ?, ?, ?)'
-  ).run(type, title, message);
+export async function broadcastNotification(type, title, message) {
+  const result = await db.execute(
+    'INSERT INTO notifications (user_id, type, title, message) VALUES (NULL, ?, ?, ?)',
+    [type, title, message]
+  );
 
   const notif = {
     id: result.lastInsertRowid,

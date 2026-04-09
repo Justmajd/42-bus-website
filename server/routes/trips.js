@@ -5,7 +5,8 @@ import { authenticateToken } from '../middleware/auth.js';
 const router = Router();
 
 // Get available trips
-router.get('/', authenticateToken, (req, res) => {
+// Get available trips
+router.get('/', authenticateToken, async (req, res) => {
   const { direction, date } = req.query;
 
   let query = `
@@ -31,11 +32,12 @@ router.get('/', authenticateToken, (req, res) => {
 
   query += ' AND t.status != \'completed\' ORDER BY t.date ASC, ts.hour ASC';
 
-  const trips = db.prepare(query).all(...params);
+  const tripsRes = await db.execute(query, params);
+  const trips = tripsRes.rows;
 
   // Enrich with pickup point stats
-  const enriched = trips.map(trip => {
-    const pickupStats = db.prepare(`
+  const enriched = await Promise.all(trips.map(async trip => {
+    const pickupStatsRes = await db.execute(`
       SELECT 
         pp.id, pp.name, pp.lat, pp.lng, pp.eta_minutes,
         COUNT(b.id) as student_count
@@ -43,21 +45,21 @@ router.get('/', authenticateToken, (req, res) => {
       LEFT JOIN bookings b ON b.pickup_point_id = pp.id AND b.trip_id = ? AND b.status IN ('booked', 'confirmed', 'attended')
       GROUP BY pp.id
       ORDER BY pp.order_index
-    `).all(trip.id);
+    `, [trip.id]);
 
     return {
       ...trip,
       seats_available: trip.seats_total - trip.seats_booked,
-      pickup_stats: pickupStats
+      pickup_stats: pickupStatsRes.rows
     };
-  });
+  }));
 
   res.json(enriched);
 });
 
 // Get single trip with details
-router.get('/:id', authenticateToken, (req, res) => {
-  const trip = db.prepare(`
+router.get('/:id', authenticateToken, async (req, res) => {
+  const tripRes = await db.execute(`
     SELECT 
       t.*,
       ts.hour,
@@ -66,13 +68,14 @@ router.get('/:id', authenticateToken, (req, res) => {
     FROM trips t
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
     WHERE t.id = ?
-  `).get(req.params.id);
+  `, [req.params.id]);
+  const trip = tripRes.rows[0];
 
   if (!trip) {
     return res.status(404).json({ error: 'Trip not found.' });
   }
 
-  const bookings = db.prepare(`
+  const bookingsRes = await db.execute(`
     SELECT 
       b.*,
       u.name as student_name,
@@ -83,9 +86,9 @@ router.get('/:id', authenticateToken, (req, res) => {
     JOIN pickup_points pp ON b.pickup_point_id = pp.id
     WHERE b.trip_id = ? AND b.status != 'cancelled'
     ORDER BY b.booked_at ASC
-  `).all(req.params.id);
+  `, [req.params.id]);
 
-  const pickupStats = db.prepare(`
+  const pickupStatsRes = await db.execute(`
     SELECT 
       pp.id, pp.name, pp.lat, pp.lng, pp.eta_minutes, pp.order_index,
       COUNT(b.id) as student_count
@@ -93,26 +96,26 @@ router.get('/:id', authenticateToken, (req, res) => {
     LEFT JOIN bookings b ON b.pickup_point_id = pp.id AND b.trip_id = ? AND b.status IN ('booked', 'confirmed', 'attended')
     GROUP BY pp.id
     ORDER BY pp.order_index
-  `).all(req.params.id);
+  `, [req.params.id]);
 
   res.json({
     ...trip,
     seats_available: trip.seats_total - trip.seats_booked,
-    bookings,
-    pickup_stats: pickupStats
+    bookings: bookingsRes.rows,
+    pickup_stats: pickupStatsRes.rows
   });
 });
 
 // Get pickup points
-router.get('/config/pickup-points', authenticateToken, (req, res) => {
-  const points = db.prepare('SELECT * FROM pickup_points ORDER BY order_index').all();
-  res.json(points);
+router.get('/config/pickup-points', authenticateToken, async (req, res) => {
+  const pointsRes = await db.execute('SELECT * FROM pickup_points ORDER BY order_index');
+  res.json(pointsRes.rows);
 });
 
 // Get time slots
-router.get('/config/time-slots', authenticateToken, (req, res) => {
-  const slots = db.prepare('SELECT * FROM time_slots WHERE is_active = 1 ORDER BY hour').all();
-  res.json(slots);
+router.get('/config/time-slots', authenticateToken, async (req, res) => {
+  const slotsRes = await db.execute('SELECT * FROM time_slots WHERE is_active = 1 ORDER BY hour');
+  res.json(slotsRes.rows);
 });
 
 export default router;

@@ -31,7 +31,8 @@ app.use('/api/admin', adminRoutes);
 // QR code endpoint
 app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => {
   const { default: db } = await import('./db.js');
-  const trip = db.prepare('SELECT qr_token FROM trips WHERE id = ? AND status = \'started\'').get(req.params.tripId);
+  const result = await db.execute('SELECT qr_token FROM trips WHERE id = ? AND status = \'started\'', [req.params.tripId]);
+  const trip = result.rows[0];
   
   if (!trip || !trip.qr_token) {
     return res.status(404).json({ error: 'No QR code available. Trip must be started first.' });
@@ -45,11 +46,16 @@ app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => 
   res.json({ qr_data_url: qrDataUrl, qr_token: trip.qr_token });
 });
 
-
-
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🚌 42 Bus Booking API running at http://0.0.0.0:${PORT}`);
-  console.log(`📡 SSE stream at http://0.0.0.0:${PORT}/api/notifications/stream`);
-  startScheduler();
+import { initializeDatabase } from './db.js';
+
+initializeDatabase().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🚌 42 Bus Booking API running at http://0.0.0.0:${PORT}`);
+    console.log(`📡 SSE stream at http://0.0.0.0:${PORT}/api/notifications/stream`);
+    startScheduler();
+  });
+}).catch(err => {
+  console.error("Failed to initialize database:", err);
+  process.exit(1);
 });

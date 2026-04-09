@@ -3,11 +3,13 @@ import db from '../db.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { broadcast, notifyUser, createNotification } from '../services/notifier.js';
+import { generateNextDayTrip } from '../services/scheduler.js';
+import { getAmmanDate, getAmmanDateTimeString } from '../utils/timezone.js';
 
 const router = Router();
 
 // Get all trips (admin view)
-router.get('/trips', authenticateToken, requireAdmin, (req, res) => {
+router.get('/trips', authenticateToken, requireAdmin, async (req, res) => {
   const { status, direction, date } = req.query;
 
   let query = `
@@ -38,16 +40,16 @@ router.get('/trips', authenticateToken, requireAdmin, (req, res) => {
 
   query += ' ORDER BY t.date DESC, ts.hour ASC';
 
-  const trips = db.prepare(query).all(...params);
-  res.json(trips.map(t => ({
+  const tripsRes = await db.execute(query, params);
+  res.json(tripsRes.rows.map(t => ({
     ...t,
     seats_available: t.seats_total - t.seats_booked
   })));
 });
 
 // Get trip detail (admin view)
-router.get('/trips/:id', authenticateToken, requireAdmin, (req, res) => {
-  const trip = db.prepare(`
+router.get('/trips/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const tripRes = await db.execute(`
     SELECT 
       t.*,
       ts.hour,
@@ -56,13 +58,14 @@ router.get('/trips/:id', authenticateToken, requireAdmin, (req, res) => {
     FROM trips t
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
     WHERE t.id = ?
-  `).get(req.params.id);
+  `, [req.params.id]);
+  const trip = tripRes.rows[0];
 
   if (!trip) {
     return res.status(404).json({ error: 'Trip not found.' });
   }
 
-  const bookings = db.prepare(`
+  const bookingsRes = await db.execute(`
     SELECT 
       b.*,
       u.name as student_name,
@@ -76,9 +79,9 @@ router.get('/trips/:id', authenticateToken, requireAdmin, (req, res) => {
     JOIN pickup_points pp ON b.pickup_point_id = pp.id
     WHERE b.trip_id = ? AND b.status != 'cancelled'
     ORDER BY pp.order_index, b.booked_at ASC
-  `).all(req.params.id);
+  `, [req.params.id]);
 
-  const pickupStats = db.prepare(`
+  const pickupStatsRes = await db.execute(`
     SELECT 
       pp.id, pp.name, pp.lat, pp.lng, pp.eta_minutes, pp.order_index,
       COUNT(b.id) as student_count
@@ -86,18 +89,18 @@ router.get('/trips/:id', authenticateToken, requireAdmin, (req, res) => {
     LEFT JOIN bookings b ON b.pickup_point_id = pp.id AND b.trip_id = ? AND b.status IN ('booked', 'confirmed', 'attended')
     GROUP BY pp.id
     ORDER BY pp.order_index
-  `).all(req.params.id);
+  `, [req.params.id]);
 
   res.json({
     ...trip,
     seats_available: trip.seats_total - trip.seats_booked,
-    bookings,
-    pickup_stats: pickupStats
+    bookings: bookingsRes.rows,
+    pickup_stats: pickupStatsRes.rows
   });
 });
 
 // Update trip status
-router.patch('/trips/:id/status', authenticateToken, requireAdmin, (req, res) => {
+router.patch('/trips/:id/status', authenticateToken, requireAdmin, async (req, res) => {
   const { status } = req.body;
   const tripId = req.params.id;
 
@@ -106,7 +109,8 @@ router.patch('/trips/:id/status', authenticateToken, requireAdmin, (req, res) =>
     return res.status(400).json({ error: 'Invalid status.' });
   }
 
-  const trip = db.prepare('SELECT * FROM trips WHERE id = ?').get(tripId);
+  const tripRes = await db.execute('SELECT * FROM trips WHERE id = ?', [tripId]);
+  const trip = tripRes.rows[0];
   if (!trip) {
     return res.status(404).json({ error: 'Trip not found.' });
   }
@@ -116,23 +120,27 @@ router.patch('/trips/:id/status', authenticateToken, requireAdmin, (req, res) =>
   // Generate QR token when starting trip
   if (status === 'started' && !trip.qr_token) {
     qrToken = `42bus:${tripId}:${uuidv4()}`;
-    db.prepare('UPDATE trips SET qr_token = ? WHERE id = ?').run(qrToken, tripId);
+    await db.execute('UPDATE trips SET qr_token = ? WHERE id = ?', [qrToken, tripId]);
   }
 
   // When confirming, update all booked bookings to confirmed
   if (status === 'confirmed') {
-    db.prepare(
-      'UPDATE bookings SET status = \'confirmed\' WHERE trip_id = ? AND status = \'booked\''
-    ).run(tripId);
+    await db.execute(
+      'UPDATE bookings SET status = \'confirmed\' WHERE trip_id = ? AND status = \'booked\'',
+      [tripId]
+    );
 
     // Notify all booked students
-    const bookings = db.prepare(
-      'SELECT user_id FROM bookings WHERE trip_id = ? AND status = \'confirmed\''
-    ).all(tripId);
+    const bookingsRes = await db.execute(
+      'SELECT user_id FROM bookings WHERE trip_id = ? AND status = \'confirmed\'',
+      [tripId]
+    );
 
-    const ts = db.prepare('SELECT label FROM time_slots WHERE id = ?').get(trip.time_slot_id);
-    for (const b of bookings) {
-      createNotification(
+    const tsRes = await db.execute('SELECT label FROM time_slots WHERE id = ?', [trip.time_slot_id]);
+    const ts = tsRes.rows[0];
+    
+    for (const b of bookingsRes.rows) {
+      await createNotification(
         b.user_id,
         'trip_confirmed',
         'Trip Confirmed! ✅',
@@ -143,33 +151,35 @@ router.patch('/trips/:id/status', authenticateToken, requireAdmin, (req, res) =>
 
   // When completing, process no-shows
   if (status === 'completed') {
-    const noShows = db.prepare(
-      'SELECT b.*, u.warnings FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.trip_id = ? AND b.status IN (\'booked\', \'confirmed\')'
-    ).all(tripId);
+    const noShowsRes = await db.execute(
+      'SELECT b.*, u.warnings FROM bookings b JOIN users u ON b.user_id = u.id WHERE b.trip_id = ? AND b.status IN (\'booked\', \'confirmed\')',
+      [tripId]
+    );
 
-    for (const noShow of noShows) {
-      db.prepare('UPDATE bookings SET status = \'no_show\' WHERE id = ?').run(noShow.id);
+    for (const noShow of noShowsRes.rows) {
+      await db.execute('UPDATE bookings SET status = \'no_show\' WHERE id = ?', [noShow.id]);
 
       const newWarnings = (noShow.warnings || 0) + 1;
       let banUntil = null;
 
       if (newWarnings >= 3) {
         // Ban for 2 days
-        const ban = new Date();
+        const ban = getAmmanDate();
         ban.setDate(ban.getDate() + 2);
-        banUntil = ban.toISOString();
+        banUntil = getAmmanDateTimeString(ban);
       }
 
-      db.prepare(
-        'UPDATE users SET warnings = ?, banned_until = ? WHERE id = ?'
-      ).run(newWarnings, banUntil, noShow.user_id);
+      await db.execute(
+        'UPDATE users SET warnings = ?, banned_until = ? WHERE id = ?',
+        [newWarnings, banUntil, noShow.user_id]
+      );
 
       // Notify no-show student
       const warningMsg = newWarnings >= 3
         ? `You did not attend your booked trip. You have been banned from booking for 2 days. (Warning ${newWarnings}/3)`
         : `You did not attend your booked trip. Warning ${newWarnings}/3. After 3 warnings, you will receive a 2-day ban.`;
 
-      createNotification(
+      await createNotification(
         noShow.user_id,
         'warning',
         '⚠️ No-Show Warning',
@@ -177,28 +187,13 @@ router.patch('/trips/:id/status', authenticateToken, requireAdmin, (req, res) =>
       );
     }
 
-    // Auto-generate next day's trip for same slot (for to_42 trips)
+    // Auto-generate next day's trip immediately using identical time slot
     if (trip.direction === 'to_42') {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-      const slot = db.prepare('SELECT * FROM time_slots WHERE id = ?').get(trip.time_slot_id);
-      if (slot) {
-        const existing = db.prepare(
-          'SELECT id FROM trips WHERE direction = \'to_42\' AND date = ? AND time_slot_id = ?'
-        ).get(tomorrowStr, slot.id);
-
-        if (!existing) {
-          db.prepare(
-            'INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status) VALUES (?, ?, ?, ?, \'pending\')'
-          ).run('to_42', tomorrowStr, slot.id, `${tomorrowStr}T${String(slot.hour).padStart(2, '0')}:00:00`);
-        }
-      }
+      await generateNextDayTrip(trip);
     }
   }
 
-  db.prepare('UPDATE trips SET status = ? WHERE id = ?').run(status, tripId);
+  await db.execute('UPDATE trips SET status = ? WHERE id = ?', [status, tripId]);
 
   // Broadcast status update
   broadcast('trip_update', {
@@ -211,18 +206,19 @@ router.patch('/trips/:id/status', authenticateToken, requireAdmin, (req, res) =>
 });
 
 // Manage time slots
-router.get('/time-slots', authenticateToken, requireAdmin, (req, res) => {
-  const slots = db.prepare('SELECT * FROM time_slots ORDER BY hour').all();
-  res.json(slots);
+router.get('/time-slots', authenticateToken, requireAdmin, async (req, res) => {
+  const slotsRes = await db.execute('SELECT * FROM time_slots ORDER BY hour');
+  res.json(slotsRes.rows);
 });
 
-router.post('/time-slots', authenticateToken, requireAdmin, (req, res) => {
+router.post('/time-slots', authenticateToken, requireAdmin, async (req, res) => {
   const { hour, label, is_active } = req.body;
   
   try {
-    const result = db.prepare(
-      'INSERT OR REPLACE INTO time_slots (hour, label, is_active) VALUES (?, ?, ?)'
-    ).run(hour, label, is_active ? 1 : 0);
+    const result = await db.execute(
+      'INSERT OR REPLACE INTO time_slots (hour, label, is_active) VALUES (?, ?, ?)',
+      [hour, label, is_active ? 1 : 0]
+    );
     res.json({ id: result.lastInsertRowid, hour, label, is_active });
   } catch (err) {
     res.status(400).json({ error: 'Failed to update time slot.' });

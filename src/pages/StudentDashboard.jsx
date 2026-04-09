@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import MapView from '../components/MapView';
 import { API_BASE } from '../api';
+import { getAmmanDateString } from '../utils/timezone.js';
 
 export default function StudentDashboard() {
   const { token } = useAuth();
@@ -25,10 +26,10 @@ export default function StudentDashboard() {
 
   const fetchData = useCallback(async () => {
     try {
+      const todayStr = getAmmanDateString();
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      const todayStr = new Date().toISOString().split('T')[0];
+      const tomorrowStr = getAmmanDateString(tomorrow);
 
       const [tripsRes, bookingsRes, pointsRes] = await Promise.all([
         fetch(`${API_BASE}/api/trips?direction=${activeTab}${activeTab === 'to_42' ? `&date=${tomorrowStr}` : `&date=${todayStr}`}`, { headers }),
@@ -36,7 +37,16 @@ export default function StudentDashboard() {
         fetch(`${API_BASE}/api/trips/config/pickup-points`, { headers })
       ]);
 
-      if (tripsRes.ok) setTrips(await tripsRes.json());
+      if (tripsRes.ok) {
+        const fetchedTrips = await tripsRes.json();
+        const active = fetchedTrips.filter(t => ['pending', 'confirmed', 'started'].includes(t.status));
+        const passed = fetchedTrips.filter(t => !['pending', 'confirmed', 'started'].includes(t.status));
+        
+        active.sort((a, b) => new Date(a.calculated_departure) - new Date(b.calculated_departure));
+        passed.sort((a, b) => new Date(b.calculated_departure) - new Date(a.calculated_departure));
+        
+        setTrips([...active, ...passed]);
+      }
       if (bookingsRes.ok) setMyBookings(await bookingsRes.json());
       if (pointsRes.ok) setPickupPoints(await pointsRes.json());
     } catch (err) {
@@ -116,6 +126,11 @@ export default function StudentDashboard() {
   // Check if user already booked a trip
   const isBooked = (tripId) => myBookings.some(b => b.trip_id === tripId && b.status !== 'cancelled');
 
+  // One active booking per day check
+  const activeBookingDates = myBookings
+    .filter(b => ['booked', 'confirmed'].includes(b.status))
+    .map(b => b.trip_date);
+
   if (loading) {
     return <div className="loading-spinner"><div className="spinner"></div></div>;
   }
@@ -182,6 +197,7 @@ export default function StudentDashboard() {
                   const available = trip.seats_available;
                   const seatColor = getSeatColor(available, trip.seats_total);
                   const alreadyBooked = isBooked(trip.id);
+                  const hasActiveBookingToday = activeBookingDates.includes(trip.date);
                   const fillPct = ((trip.seats_total - available) / trip.seats_total) * 100;
 
                   return (
@@ -234,26 +250,35 @@ export default function StudentDashboard() {
                       {/* Booking Form */}
                       {!alreadyBooked && available > 0 && trip.status !== 'started' && trip.status !== 'completed' && (
                         <div className="trip-booking-form">
-                          <div className="form-group">
-                            <label className="form-label">Pickup Point</label>
-                            <select
-                              className="form-select"
-                              value={selectedPickup[trip.id] || ''}
-                              onChange={e => setSelectedPickup(prev => ({ ...prev, [trip.id]: e.target.value }))}
-                            >
-                              <option value="">Select point</option>
-                              {pickupPoints.map(p => (
-                                <option key={p.id} value={p.id}>{p.name} (ETA: {p.eta_minutes}min)</option>
-                              ))}
-                            </select>
-                          </div>
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => handleBook(trip.id)}
-                            disabled={actionLoading === trip.id}
-                          >
-                            {actionLoading === trip.id ? '...' : 'Book'}
-                          </button>
+                          {hasActiveBookingToday ? (
+                            <div className="alert alert-warning" style={{ fontSize: '0.8rem', width: '100%', marginBottom: 0 }}>
+                              <AlertCircle size={14} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                              One active booking allowed per day.
+                            </div>
+                          ) : (
+                            <>
+                              <div className="form-group">
+                                <label className="form-label">Pickup Point</label>
+                                <select
+                                  className="form-select"
+                                  value={selectedPickup[trip.id] || ''}
+                                  onChange={e => setSelectedPickup(prev => ({ ...prev, [trip.id]: e.target.value }))}
+                                >
+                                  <option value="">Select point</option>
+                                  {pickupPoints.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name} (ETA: {p.eta_minutes}min)</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button
+                                className="btn btn-primary"
+                                onClick={() => handleBook(trip.id)}
+                                disabled={actionLoading === trip.id}
+                              >
+                                {actionLoading === trip.id ? '...' : 'Book'}
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
 
