@@ -98,8 +98,18 @@ export default function AdminTripDetail() {
       <div className="glass-panel mb-4 animate-in">
         <div className="flex items-center justify-between" style={{ flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--accent-blue)', fontWeight: 600, marginBottom: 4 }}>
-              {trip.direction === 'to_42' ? 'Point → 42' : '42 → Point'}
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {trip.direction === 'to_42' ? (
+                <>
+                  <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>PICKUP TO 42</span>
+                  <span style={{ color: 'var(--accent-blue)' }}><ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Point → 42</span>
+                </>
+              ) : (
+                <>
+                  <span className="badge badge-warning" style={{ fontSize: '0.75rem', padding: '2px 8px', backgroundColor: 'var(--accent-amber)', color: '#000' }}>DROP OFF FROM 42</span>
+                  <span style={{ color: 'var(--accent-blue)' }}><ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> 42 → Point</span>
+                </>
+              )}
             </div>
             <h1 className="flex items-center gap-2" style={{ marginBottom: 4 }}>
               <Clock size={24} /> {trip.time_label}

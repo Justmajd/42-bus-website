@@ -140,11 +140,17 @@ export default function AdminDashboard() {
             <div key={trip.id} className="trip-card animate-in">
               <div className="trip-card-header">
                 <div>
-                  <div className="trip-direction">
+                  <div className="trip-direction" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     {trip.direction === 'to_42' ? (
-                      <><ArrowRight size={14} /> Point → 42</>
+                      <>
+                        <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '2px 8px' }}>PICKUP TO 42</span>
+                        <span><ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> Point → 42</span>
+                      </>
                     ) : (
-                      <><ArrowLeft size={14} /> 42 → Point</>
+                      <>
+                        <span className="badge badge-warning" style={{ fontSize: '0.75rem', padding: '2px 8px', backgroundColor: 'var(--accent-amber)', color: '#000' }}>DROP OFF FROM 42</span>
+                        <span><ArrowLeft size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} /> 42 → Point</span>
+                      </>
                     )}
                   </div>
                   <div className="trip-time">
