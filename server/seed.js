@@ -14,7 +14,20 @@ try {
 }
 
 try {
-  console.log('🏗️ Building tables...');
+  console.log('🧹 Pruning previous duplicates to prepare for strict mode...');
+  // Only attempt if trips table actually exists yet
+  try {
+    await db.execute(`
+      DELETE FROM trips 
+      WHERE id NOT IN (
+        SELECT MIN(id) FROM trips GROUP BY direction, date, time_slot_id
+      )
+    `);
+  } catch (err) {
+    // Ignore if table doesn't exist on fresh boots
+  }
+
+  console.log('🏗️ Building tables with strict unique indexes...');
   await initializeDatabase();
 } catch (e) {
   console.error('❌ FATAL ERROR DURING DB INITIALIZATION:', e.message);

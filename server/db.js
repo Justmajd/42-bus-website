@@ -83,6 +83,7 @@ export async function initializeDatabase() {
   CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
   CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_uniqueness ON trips(direction, date, time_slot_id);
   `);
 }
 
