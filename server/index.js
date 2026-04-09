@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.js';
 import { startScheduler } from './services/scheduler.js';
 import { generateQRDataUrl } from './utils/qr.js';
 import { authenticateToken, requireAdmin } from './middleware/auth.js';
+import db from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +28,16 @@ app.use('/api/trips', tripRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await db.execute('SELECT 1');
+    res.json({ ok: true, status: 'healthy' });
+  } catch (err) {
+    console.error('[HEALTH ERROR]', err?.message || err);
+    res.status(500).json({ ok: false, error: err?.message || 'Database check failed' });
+  }
+});
 
 // QR code endpoint
 app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => {
@@ -48,6 +59,18 @@ app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => 
 
 // Serve frontend in production environments
 app.use(express.static(path.join(__dirname, '../dist')));
+
+// Return JSON for API errors instead of HTML error pages.
+app.use((err, req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    return next(err);
+  }
+
+  const status = err?.status || 500;
+  const message = err?.message || 'Internal Server Error';
+  console.error('[API ERROR]', req.method, req.path, message);
+  res.status(status).json({ error: message });
+});
 
 // Fallback all unhandled routes to React's index.html
 app.use((req, res) => {
