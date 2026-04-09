@@ -34,16 +34,41 @@ function buildCandidateUrls(rawUrl) {
   const cleaned = cleanEnvValue(rawUrl);
   if (!cleaned) return [];
 
+  const urls = [];
+
+  const pushUnique = (value) => {
+    if (value && !urls.includes(value)) {
+      urls.push(value);
+    }
+  };
+
+  const addGlobalTursoFallback = (host) => {
+    // Render sometimes fails resolving regional Turso hosts; try global host form too.
+    const regional = host.match(/^(.*)\.aws-[^.]+\.turso\.io$/);
+    if (!regional) return;
+    const baseHost = `${regional[1]}.turso.io`;
+    pushUnique(`libsql://${baseHost}`);
+    pushUnique(`https://${baseHost}`);
+  };
+
   if (!cleaned.includes('://')) {
     const host = cleaned.replace(/^\/+|\/+$/g, '');
-    return [`libsql://${host}`, `https://${host}`];
+    pushUnique(`libsql://${host}`);
+    pushUnique(`https://${host}`);
+    addGlobalTursoFallback(host);
+    return urls;
   }
 
   try {
     const parsed = new URL(cleaned);
     const host = parsed.host;
     if (!host) return [cleaned];
-    return [cleaned, `libsql://${host}`, `https://${host}`].filter((u, idx, arr) => arr.indexOf(u) === idx);
+
+    pushUnique(cleaned);
+    pushUnique(`libsql://${host}`);
+    pushUnique(`https://${host}`);
+    addGlobalTursoFallback(host);
+    return urls;
   } catch {
     return [cleaned];
   }
@@ -97,7 +122,8 @@ async function getClient() {
           return activeClient;
         } catch (err) {
           lastErr = err;
-          console.error(`[DB CONNECT FAILED] ${url}: ${err.message}`);
+          const cause = err?.cause?.message || err?.cause || 'no-cause';
+          console.error(`[DB CONNECT FAILED] ${url}: ${err.message} | cause: ${cause}`);
         }
       }
 
