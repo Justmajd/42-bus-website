@@ -8,8 +8,8 @@ const router = Router();
 // Get Analytics Dashboard
 router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const totalRidesRes = await db.execute('SELECT COUNT(*) as count FROM trips WHERE status = "completed"');
-    const totalStudentsRes = await db.execute('SELECT COUNT(*) as count FROM users WHERE role = "student"');
+    const totalRidesRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status = 'completed'");
+    const totalStudentsRes = await db.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'");
     
     // Most popular timeslots
     const timeslotsRes = await db.execute(`
@@ -38,6 +38,7 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
       popularPickups: pickupsRes.rows
     });
   } catch (err) {
+    console.error('[ADMIN STATS ERROR]', err?.message || err);
     res.status(500).json({ error: 'Failed to generate metrics.' });
   }
 });
@@ -45,9 +46,10 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
 // Get all users
 router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const usersRes = await db.execute('SELECT id, name, email, role, warnings, banned_until, created_at FROM users WHERE role = "student" ORDER BY created_at DESC');
+    const usersRes = await db.execute("SELECT id, name, email, role, warnings, banned_until, created_at FROM users WHERE role = 'student' ORDER BY created_at DESC");
     res.json(usersRes.rows);
   } catch (err) {
+    console.error('[ADMIN USERS ERROR]', err?.message || err);
     res.status(500).json({ error: 'Failed to fetch users.' });
   }
 });
