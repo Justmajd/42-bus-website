@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Clock, Calendar, Users, MapPin, QrCode,
@@ -7,8 +7,10 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import MapView from '../components/MapView';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { API_BASE } from '../api';
-import { formatTimeLabel } from '../utils/timeFormat.js';
+import { formatTimeLabel, formatDateLabel } from '../utils/timeFormat.js';
+import useTripLocationTracking from '../hooks/useTripLocationTracking';
 
 export default function DriverTripDetail() {
   const { id } = useParams();
@@ -19,6 +21,9 @@ export default function DriverTripDetail() {
   const [qrData, setQrData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewingPhoto, setViewingPhoto] = useState(null);
+  const [scanFlash, setScanFlash] = useState(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState(null);
+  const flashTimeoutRef = useRef(null);
 
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -55,12 +60,38 @@ export default function DriverTripDetail() {
   useEffect(() => { fetchTrip(); }, [id]);
   useEffect(() => { if (tripUpdates) fetchTrip(); }, [tripUpdates]);
 
-  const updateStatus = async (status) => {
-    const confirmMsg = status === 'completed'
-      ? 'Complete this trip? Students who did not attend will receive a no-show warning.'
-      : `Set trip status to "${status}"?`;
-    if (!confirm(confirmMsg)) return;
+  useEffect(() => {
+    if (!tripUpdates || tripUpdates.status !== 'attended') return;
+    if (Number(tripUpdates.trip_id) !== Number(id)) return;
 
+    setScanFlash({
+      name: tripUpdates.student_name || 'Student',
+      photo: tripUpdates.student_picture || null,
+    });
+
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
+    }
+
+    flashTimeoutRef.current = setTimeout(() => {
+      setScanFlash(null);
+      flashTimeoutRef.current = null;
+    }, 2000);
+  }, [tripUpdates, id]);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+    };
+  }, []);
+
+  useTripLocationTracking({
+    tripId: trip?.id,
+    status: trip?.status,
+    token,
+  });
+
+  const updateStatus = async (status) => {
     try {
       const res = await fetch(`${API_BASE}/api/driver/trips/${id}/status`, {
         method: 'PATCH',
@@ -92,6 +123,39 @@ export default function DriverTripDetail() {
 
   return (
     <div className="page-content container">
+      <ConfirmDialog
+        open={!!pendingStatusChange}
+        title="Change Trip Status"
+        message={pendingStatusChange === 'completed'
+          ? 'Complete this trip? Students who did not attend will receive a no-show warning.'
+          : `Set trip status to "${pendingStatusChange}"?`}
+        confirmText="Yes, Continue"
+        danger={pendingStatusChange === 'completed'}
+        onCancel={() => setPendingStatusChange(null)}
+        onConfirm={async () => {
+          const status = pendingStatusChange;
+          setPendingStatusChange(null);
+          if (status) await updateStatus(status);
+        }}
+      />
+
+      {scanFlash && (
+        <div className="scan-flash-card animate-in">
+          <div className="scan-flash-avatar">
+            {scanFlash.photo ? (
+              <img src={scanFlash.photo} alt={scanFlash.name} className="scan-flash-avatar-image" />
+            ) : (
+              <User size={22} />
+            )}
+          </div>
+          <div className="scan-flash-content">
+            <div className="scan-flash-label">Attendance confirmed</div>
+            <div className="scan-flash-name">{scanFlash.name}</div>
+          </div>
+          <CheckCircle size={22} className="scan-flash-check" />
+        </div>
+      )}
+
       <button className="back-button" onClick={() => navigate(-1)}>
         <ArrowLeft size={16} /> Back to Dashboard
       </button>
@@ -115,7 +179,7 @@ export default function DriverTripDetail() {
               <Clock size={24} /> {formatTimeLabel(trip.time_label)}
             </h1>
             <div className="flex items-center gap-2 text-muted">
-              <Calendar size={14} /> {trip.date}
+              <Calendar size={14} /> {formatDateLabel(trip.date)}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -149,21 +213,27 @@ export default function DriverTripDetail() {
         {/* Actions */}
         <div className="flex items-center gap-2 mt-4">
           {trip.status === 'pending' && (
-            <button className="btn btn-primary" onClick={() => updateStatus('confirmed')}>
+            <button className="btn btn-primary" onClick={() => setPendingStatusChange('confirmed')}>
               <CheckCircle size={16} /> Confirm Trip
             </button>
           )}
           {trip.status === 'confirmed' && (
-            <button className="btn btn-success" onClick={() => updateStatus('started')}>
+            <button className="btn btn-success" onClick={() => setPendingStatusChange('started')}>
               <Play size={16} /> Start Trip
             </button>
           )}
           {trip.status === 'started' && (
-            <button className="btn btn-warning" onClick={() => updateStatus('completed')}>
+            <button className="btn btn-warning" onClick={() => setPendingStatusChange('completed')}>
               <Flag size={16} /> Complete Trip
             </button>
           )}
         </div>
+
+        {trip.status === 'started' && (
+          <div className="alert alert-success mt-4 mb-0" style={{ fontSize: '0.9rem' }}>
+            Live driver location sharing is active.
+          </div>
+        )}
       </div>
 
       <div className="grid-2">

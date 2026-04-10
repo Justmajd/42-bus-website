@@ -73,6 +73,9 @@ async function checkTripExpiry(now) {
       continue;
     }
 
+    // Trips that never started still need tomorrow's replacement slot.
+    await generateNextDayTrip(trip);
+
     // Trips that never started should be removed instead of counted as completed.
     await db.execute('DELETE FROM bookings WHERE trip_id = ?', [trip.id]);
     await db.execute('DELETE FROM trips WHERE id = ?', [trip.id]);

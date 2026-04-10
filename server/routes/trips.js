@@ -4,6 +4,28 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
+function getDepartureHour(trip) {
+  if (Number.isFinite(Number(trip?.hour))) {
+    return Number(trip.hour);
+  }
+
+  const departureMatch = String(trip?.calculated_departure || '').match(/T(\d{2}):(\d{2})/);
+  if (departureMatch) {
+    return Number(departureMatch[1]);
+  }
+
+  const labelMatch = String(trip?.time_label || '').match(/^(\d{1,2})(?::\d{2})?\s*(am|pm)$/i);
+  if (labelMatch) {
+    let hour = Number(labelMatch[1]);
+    const meridiem = labelMatch[2].toLowerCase();
+    if (meridiem === 'pm' && hour !== 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return hour;
+  }
+
+  return null;
+}
+
 // Get available trips
 // Get available trips
 router.get('/', authenticateToken, async (req, res) => {
@@ -33,7 +55,18 @@ router.get('/', authenticateToken, async (req, res) => {
   query += ' AND t.status != \'completed\' ORDER BY t.date ASC, ts.hour ASC';
 
   const tripsRes = await db.execute(query, params);
-  const trips = tripsRes.rows;
+  const trips = tripsRes.rows.filter((trip) => {
+    if (trip.direction !== 'from_42') {
+      return true;
+    }
+
+    const departureHour = getDepartureHour(trip);
+    if (departureHour == null) {
+      return true;
+    }
+
+    return departureHour >= 15;
+  });
 
   // Enrich with pickup point stats
   const enriched = await Promise.all(trips.map(async trip => {

@@ -57,3 +57,16 @@ export function formatTimeLabel(label) {
 
   return formatSingleTime(input);
 }
+
+export function formatDateLabel(value) {
+  if (!value) return '';
+  const parsed = new Date(`${String(value).trim()}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}

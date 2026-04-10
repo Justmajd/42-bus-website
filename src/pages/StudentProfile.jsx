@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { User, Mail, AlertTriangle, Calendar, Shield, Clock, Camera, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../api';
-import { formatTimeLabel } from '../utils/timeFormat.js';
+import { formatTimeLabel, formatDateLabel } from '../utils/timeFormat.js';
 
 export default function StudentProfile() {
   const { user, token, refreshUser } = useAuth();
@@ -177,7 +177,7 @@ export default function StudentProfile() {
                   <Clock size={14} style={{ color: 'var(--text-muted)' }} />
                   <span className="student-row-name">{formatTimeLabel(b.time_label)}</span>
                 </div>
-                <span className="student-row-pickup">{b.trip_date}</span>
+                <span className="student-row-pickup">{formatDateLabel(b.trip_date)}</span>
                 <span className={`badge badge-${b.status === 'attended' ? 'success' : b.status === 'no_show' ? 'danger' : b.status === 'cancelled' ? 'completed' : 'pending'}`}>
                   {b.status}
                 </span>

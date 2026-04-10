@@ -39,6 +39,15 @@ function createNumberedIcon(count, color = '#3b82f6') {
   });
 }
 
+function createDriverIcon() {
+  return createNumberedIcon('D', '#ef4444');
+}
+
+function getGoogleDirectionsUrl(lat, lng) {
+  const destination = `${lat},${lng}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+}
+
 function MapAutoFit({ positions = [] }) {
   const map = useMap();
 
@@ -56,7 +65,7 @@ function MapAutoFit({ positions = [] }) {
   return null;
 }
 
-export default function MapView({ pickupStats = [], height = 350 }) {
+export default function MapView({ pickupStats = [], driverLocation = null, height = 350 }) {
   const center = [32.504136859235835, 35.8708342993484]; // 42 campus area
 
   const mapPositions = useMemo(() => {
@@ -64,10 +73,14 @@ export default function MapView({ pickupStats = [], height = 350 }) {
       .map((point) => [Number(point.lat), Number(point.lng)])
       .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
 
-    return [center, ...normalizedPoints];
-  }, [pickupStats]);
+    const normalizedDriverLocation = driverLocation && Number.isFinite(Number(driverLocation.lat)) && Number.isFinite(Number(driverLocation.lng))
+      ? [Number(driverLocation.lat), Number(driverLocation.lng)]
+      : null;
 
-  if (pickupStats.length === 0) return null;
+    return [center, ...normalizedPoints, ...(normalizedDriverLocation ? [normalizedDriverLocation] : [])];
+  }, [driverLocation, pickupStats]);
+
+  if (pickupStats.length === 0 && !driverLocation) return null;
 
   return (
     <div className="map-container" style={{ height }}>
@@ -88,6 +101,14 @@ export default function MapView({ pickupStats = [], height = 350 }) {
         <Marker position={center} icon={createNumberedIcon('42', '#8b5cf6')}>
           <Popup>
             <strong>42 Campus</strong>
+            <br />
+            <a
+              href={getGoogleDirectionsUrl(center[0], center[1])}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Directions
+            </a>
           </Popup>
         </Marker>
 
@@ -104,9 +125,30 @@ export default function MapView({ pickupStats = [], height = 350 }) {
               <strong>{point.name}</strong><br />
               Students: {point.student_count || 0}<br />
               ETA: {point.eta_minutes} min from 42
+              <br />
+              <a
+                href={getGoogleDirectionsUrl(point.lat, point.lng)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Directions
+              </a>
             </Popup>
           </Marker>
         ))}
+
+        {driverLocation && Number.isFinite(Number(driverLocation.lat)) && Number.isFinite(Number(driverLocation.lng)) && (
+          <Marker
+            position={[Number(driverLocation.lat), Number(driverLocation.lng)]}
+            icon={createDriverIcon()}
+          >
+            <Popup>
+              <strong>Driver is here</strong>
+              <br />
+              Live location update
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
     </div>
   );

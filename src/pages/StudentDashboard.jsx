@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ArrowRight, ArrowLeft, Clock, MapPin, Users, Calendar,
   Trash2, AlertCircle, CheckCircle, Bus, Camera
@@ -7,9 +7,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import MapView from '../components/MapView';
 import QRScanner from '../components/QRScanner';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { API_BASE } from '../api';
-import { getAmmanDateString } from '../utils/timezone.js';
-import { formatTimeLabel } from '../utils/timeFormat.js';
+import { formatTimeLabel, formatDateLabel } from '../utils/timeFormat.js';
 
 export default function StudentDashboard() {
   const { token, user } = useAuth();
@@ -24,8 +24,12 @@ export default function StudentDashboard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showScanner, setShowScanner] = useState(false);
+  const [confirmCancelBookingId, setConfirmCancelBookingId] = useState(null);
+  const [visibleRegularTripsCount, setVisibleRegularTripsCount] = useState(4);
 
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = useMemo(() => ({ 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+
+  const getDirectionsUrl = (lat, lng) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}&travelmode=driving`;
 
   const handleScan = async (qrToken) => {
     const res = await fetch(`${API_BASE}/api/bookings/attend`, {
@@ -43,11 +47,6 @@ export default function StudentDashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const todayStr = getAmmanDateString();
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = getAmmanDateString(tomorrow);
-
       const [tripsRes, bookingsRes, pointsRes] = await Promise.all([
         fetch(`${API_BASE}/api/trips?direction=${activeTab}`, { headers }),
         fetch(`${API_BASE}/api/bookings`, { headers }),
@@ -71,9 +70,13 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [token, activeTab]);
+  }, [activeTab, headers]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    setVisibleRegularTripsCount(4);
+  }, [activeTab]);
 
   // React to real-time updates
   useEffect(() => {
@@ -125,7 +128,6 @@ export default function StudentDashboard() {
   };
 
   const handleCancel = async (bookingId) => {
-    if (!confirm('Cancel this booking?')) return;
     setActionLoading(bookingId);
     try {
       const res = await fetch(`${API_BASE}/api/bookings/${bookingId}`, { method: 'DELETE', headers });
@@ -167,12 +169,62 @@ export default function StudentDashboard() {
     ['booked', 'confirmed'].includes(b.status)
   );
 
+  const customTrips = trips.filter((trip) => !trip.time_slot_id);
+  const regularTrips = trips.filter((trip) => !!trip.time_slot_id);
+  const isActiveTrip = (trip) => ['pending', 'confirmed', 'started'].includes(trip.status);
+
+  const regularActiveTrips = regularTrips.filter(isActiveTrip);
+  const regularCompletedTrips = regularTrips.filter((trip) => !isActiveTrip(trip));
+  const customActiveTrips = customTrips.filter(isActiveTrip);
+  const customCompletedTrips = customTrips.filter((trip) => !isActiveTrip(trip));
+  const completedTrips = [...regularCompletedTrips, ...customCompletedTrips];
+  const visibleRegularTrips = regularActiveTrips.slice(0, visibleRegularTripsCount);
+
+  const mapTripCandidates = [
+    ...regularActiveTrips,
+    ...customActiveTrips,
+    ...regularCompletedTrips,
+    ...customCompletedTrips
+  ];
+
+  const bookedTripIds = new Set(
+    myBookings
+      .filter((booking) => ['booked', 'confirmed', 'attended'].includes(booking.status))
+      .map((booking) => Number(booking.trip_id))
+  );
+
+  const bookedMapTrips = mapTripCandidates.filter((trip) => bookedTripIds.has(Number(trip.id)));
+
+  const mapTrip =
+    bookedMapTrips.find((trip) => trip.status === 'started') ||
+    bookedMapTrips.find((trip) => trip.pickup_stats && trip.pickup_stats.length > 0) ||
+    bookedMapTrips.find((trip) => Number.isFinite(Number(trip.driver_lat)) && Number.isFinite(Number(trip.driver_lng))) ||
+    null;
+
+  const mapDriverLocation = mapTrip && mapTrip.status === 'started' && Number.isFinite(Number(mapTrip.driver_lat)) && Number.isFinite(Number(mapTrip.driver_lng))
+    ? { lat: Number(mapTrip.driver_lat), lng: Number(mapTrip.driver_lng) }
+    : null;
+
   if (loading) {
     return <div className="loading-spinner"><div className="spinner"></div></div>;
   }
 
   return (
     <div className="page-content container">
+      <ConfirmDialog
+        open={confirmCancelBookingId !== null}
+        title="Cancel Booking"
+        message="Are you sure you want to cancel this booking?"
+        confirmText="Yes, Cancel"
+        danger
+        onCancel={() => setConfirmCancelBookingId(null)}
+        onConfirm={async () => {
+          const bookingId = confirmCancelBookingId;
+          setConfirmCancelBookingId(null);
+          if (bookingId != null) await handleCancel(bookingId);
+        }}
+      />
+
       {error && (
         <div className="alert alert-error animate-in">
           <AlertCircle size={16} /> {error}
@@ -250,13 +302,13 @@ export default function StudentDashboard() {
             )}
 
             <div className="trip-list stagger-children">
-              {trips.length === 0 ? (
+              {regularActiveTrips.length === 0 && customActiveTrips.length === 0 && completedTrips.length === 0 ? (
                 <div className="empty-state">
                   <Bus size={48} />
                   <p>No trips available right now</p>
                 </div>
               ) : (
-                trips.map(trip => {
+                visibleRegularTrips.map(trip => {
                   const available = trip.seats_available;
                   const seatColor = getSeatColor(available, trip.seats_total);
                   const alreadyBooked = isBooked(trip.id);
@@ -276,7 +328,7 @@ export default function StudentDashboard() {
                           </div>
                           <div className="trip-date">
                             <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />
-                            {trip.date}
+                            {formatDateLabel(trip.date)}
                           </div>
                         </div>
                         {getStatusBadge(trip.status)}
@@ -360,14 +412,216 @@ export default function StudentDashboard() {
                   );
                 })
               )}
+
+              {regularActiveTrips.length > visibleRegularTripsCount && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setVisibleRegularTripsCount((prev) => prev + 4)}
+                >
+                  View More (4)
+                </button>
+              )}
+
+              {customActiveTrips.length > 0 && (
+                <>
+                  <h3 className="mt-4" style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                    Custom Trips
+                  </h3>
+                  {customActiveTrips.map((trip) => {
+                    const available = trip.seats_available;
+                    const seatColor = getSeatColor(available, trip.seats_total);
+                    const alreadyBooked = isBooked(trip.id);
+                    const hasActiveBookingToday = activeBookingDates.includes(trip.date);
+                    const fillPct = ((trip.seats_total - available) / trip.seats_total) * 100;
+
+                    return (
+                      <div key={`custom-${trip.id}`} className="trip-card animate-in">
+                        <div className="trip-card-header">
+                          <div>
+                            <div className="trip-direction">
+                              {trip.direction === 'to_42' ? 'Point → 42' : '42 → Point'} • Custom
+                            </div>
+                            {trip.custom_name && (
+                              <div style={{ fontSize: '0.85rem', color: 'var(--accent-blue)', fontWeight: 600 }}>
+                                {trip.custom_name}
+                              </div>
+                            )}
+                            <div className="trip-time">
+                              <Clock size={18} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                              {formatTimeLabel(trip.time_label || trip.calculated_departure)}
+                            </div>
+                            <div className="trip-date">
+                              <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />
+                              {formatDateLabel(trip.date)}
+                            </div>
+                          </div>
+                          {getStatusBadge(trip.status)}
+                        </div>
+
+                        <div style={{ marginBottom: 12 }}>
+                          <div className="seat-bar-container">
+                            <div className={`seat-bar-fill ${seatColor}`} style={{ width: `${fillPct}%` }} />
+                          </div>
+                          <div className="seat-info">
+                            <span><span className={`seat-count ${seatColor}`}>{available}</span> seats left</span>
+                            <span>{trip.seats_total - available}/{trip.seats_total} booked</span>
+                          </div>
+                        </div>
+
+                        {Number.isFinite(Number(trip.custom_lat)) && Number.isFinite(Number(trip.custom_lng)) && (
+                          <div className="trip-meta" style={{ marginBottom: 12 }}>
+                            <a
+                              href={getDirectionsUrl(trip.custom_lat, trip.custom_lng)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="trip-meta-item"
+                              style={{ textDecoration: 'none' }}
+                            >
+                              <MapPin size={12} /> Open Custom Pin Location
+                            </a>
+                          </div>
+                        )}
+
+                        {!alreadyBooked && trip.status !== 'started' && trip.status !== 'completed' && (
+                          <div className="trip-booking-form">
+                            {hasActiveBookingToday ? (
+                              <div className="alert alert-warning" style={{ fontSize: '0.8rem', width: '100%', marginBottom: 0 }}>
+                                <AlertCircle size={14} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+                                One active booking allowed per day.
+                              </div>
+                            ) : (
+                              <>
+                                <div className="form-group">
+                                  <label className="form-label">Pickup Point</label>
+                                  <select
+                                    className="form-select"
+                                    value={selectedPickup[trip.id] || ''}
+                                    onChange={e => setSelectedPickup(prev => ({ ...prev, [trip.id]: e.target.value }))}
+                                  >
+                                    <option value="">Select point</option>
+                                    {pickupPoints.map(p => (
+                                      <option key={p.id} value={p.id}>{p.name} (ETA: {p.eta_minutes}min)</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => handleBook(trip.id)}
+                                  disabled={actionLoading === trip.id}
+                                >
+                                  {actionLoading === trip.id ? '...' : available > 0 ? 'Book' : 'Join Waitlist'}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+
+                        {alreadyBooked && (
+                          <div className="alert alert-success mt-4" style={{ marginBottom: 0, fontSize: '0.8rem' }}>
+                            <CheckCircle size={14} /> You have a booking for this trip
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {completedTrips.length > 0 && (
+                <>
+                  <h3 className="mt-4" style={{ marginBottom: 8, color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                    Completed Trips
+                  </h3>
+                  {completedTrips.map((trip) => {
+                    const available = trip.seats_available;
+                    const seatColor = getSeatColor(available, trip.seats_total);
+                    const alreadyBooked = isBooked(trip.id);
+                    const fillPct = ((trip.seats_total - available) / trip.seats_total) * 100;
+
+                    return (
+                      <div key={`completed-${trip.id}`} className="trip-card animate-in">
+                        <div className="trip-card-header">
+                          <div>
+                            <div className="trip-direction">
+                              {trip.direction === 'to_42' ? 'Point → 42' : '42 → Point'}{!trip.time_slot_id ? ' • Custom' : ''}
+                            </div>
+                            {!trip.time_slot_id && trip.custom_name && (
+                              <div style={{ fontSize: '0.85rem', color: 'var(--accent-blue)', fontWeight: 600 }}>
+                                {trip.custom_name}
+                              </div>
+                            )}
+                            <div className="trip-time">
+                              <Clock size={18} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                              {formatTimeLabel(trip.time_label || trip.calculated_departure)}
+                            </div>
+                            <div className="trip-date">
+                              <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />
+                              {formatDateLabel(trip.date)}
+                            </div>
+                          </div>
+                          {getStatusBadge(trip.status)}
+                        </div>
+
+                        <div style={{ marginBottom: 12 }}>
+                          <div className="seat-bar-container">
+                            <div className={`seat-bar-fill ${seatColor}`} style={{ width: `${fillPct}%` }} />
+                          </div>
+                          <div className="seat-info">
+                            <span>
+                              <span className={`seat-count ${seatColor}`}>{available}</span> seats left
+                            </span>
+                            <span>{trip.seats_total - available}/{trip.seats_total} booked</span>
+                          </div>
+                        </div>
+
+                        {trip.pickup_stats && trip.pickup_stats.length > 0 && (
+                          <div className="trip-meta">
+                            {trip.pickup_stats.map(ps => (
+                              <div key={ps.id} className="trip-meta-item">
+                                <MapPin size={12} />
+                                {ps.name} ({ps.student_count}) • {ps.eta_minutes}min
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {!trip.time_slot_id && Number.isFinite(Number(trip.custom_lat)) && Number.isFinite(Number(trip.custom_lng)) && (
+                          <div className="trip-meta" style={{ marginTop: 8 }}>
+                            <a
+                              href={getDirectionsUrl(trip.custom_lat, trip.custom_lng)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="trip-meta-item"
+                              style={{ textDecoration: 'none' }}
+                            >
+                              <MapPin size={12} /> Open Custom Pin Location
+                            </a>
+                          </div>
+                        )}
+
+                        {alreadyBooked && (
+                          <div className="alert alert-success mt-4" style={{ marginBottom: 0, fontSize: '0.8rem' }}>
+                            <CheckCircle size={14} /> You have a booking for this trip
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </div>
 
           {/* Map */}
-          {trips.length > 0 && trips[0].pickup_stats && (
+          {mapTrip && (
             <div className="glass-panel">
-              <h2><MapPin size={20} /> Pickup Points</h2>
-              <MapView pickupStats={trips[0].pickup_stats} />
+              <h2><MapPin size={20} /> {mapDriverLocation ? 'Live Trip Tracking' : 'Pickup Points'}</h2>
+              {mapTrip.status === 'started' && mapDriverLocation && (
+                <div className="mb-3" style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 600 }}>
+                  Live driver location is being shared now.
+                </div>
+              )}
+              <MapView pickupStats={mapTrip.pickup_stats || []} driverLocation={mapDriverLocation} />
             </div>
           )}
         </div>
@@ -405,7 +659,7 @@ export default function StudentDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
-                        {booking.trip_date}
+                        {formatDateLabel(booking.trip_date)}
                       </div>
                     </div>
 
@@ -420,7 +674,7 @@ export default function StudentDashboard() {
                       {booking.trip_status !== 'started' && booking.trip_status !== 'completed' && booking.status !== 'attended' && (
                         <button
                           className="btn btn-danger btn-sm"
-                          onClick={() => handleCancel(booking.id)}
+                          onClick={() => setConfirmCancelBookingId(booking.id)}
                           disabled={actionLoading === booking.id}
                         >
                           <Trash2 size={12} /> Cancel

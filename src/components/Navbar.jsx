@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Bus, LayoutDashboard, User, LogOut, Users } from 'lucide-react';
+import { Bus, LayoutDashboard, User, LogOut, Users, Route, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 
@@ -40,6 +40,20 @@ export default function Navbar() {
             <Link to="/admin/users" className={location.pathname.startsWith('/admin/users') ? 'active' : ''}>
               <Users size={16} />
               <span className="nav-text">Students</span>
+            </Link>
+          )}
+
+          {isAdmin && (
+            <Link to="/admin/trips" className={location.pathname.startsWith('/admin/trips') ? 'active' : ''}>
+              <Route size={16} />
+              <span className="nav-text">Trips</span>
+            </Link>
+          )}
+
+          {isAdmin && (
+            <Link to="/admin/notifications" className={location.pathname.startsWith('/admin/notifications') ? 'active' : ''}>
+              <Send size={16} />
+              <span className="nav-text">Notifications</span>
             </Link>
           )}
           

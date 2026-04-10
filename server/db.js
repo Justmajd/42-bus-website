@@ -1,5 +1,6 @@
 import { createClient } from '@libsql/client';
 import dotenv from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,7 +15,6 @@ function normalizeTursoUrl(rawUrl) {
   const cleaned = cleanEnvValue(rawUrl);
   if (!cleaned) return '';
 
-  // Accept protocol-less hostnames and normalize to libsql://
   if (!cleaned.includes('://')) {
     return `libsql://${cleaned.replace(/^\/+|\/+$/g, '')}`;
   }
@@ -22,8 +22,6 @@ function normalizeTursoUrl(rawUrl) {
   try {
     const parsed = new URL(cleaned);
     if (!parsed.hostname) return cleaned;
-
-    // Turso/libsql remote URLs should target the DB host. Drop paths that can cause 400s.
     return `libsql://${parsed.host}`;
   } catch {
     return cleaned;
@@ -35,7 +33,6 @@ function buildCandidateUrls(rawUrl) {
   if (!cleaned) return [];
 
   const urls = [];
-
   const pushUnique = (value) => {
     if (value && !urls.includes(value)) {
       urls.push(value);
@@ -43,7 +40,6 @@ function buildCandidateUrls(rawUrl) {
   };
 
   const addGlobalTursoFallback = (host) => {
-    // Render sometimes fails resolving regional Turso hosts; try global host form too.
     const regional = host.match(/^(.*)\.aws-[^.]+\.turso\.io$/);
     if (!regional) return;
     const baseHost = `${regional[1]}.turso.io`;
@@ -74,69 +70,92 @@ function buildCandidateUrls(rawUrl) {
   }
 }
 
+function getLocalDbUrl() {
+  const dataDir = path.join(__dirname, 'data');
+  const dbFile = path.join(dataDir, 'local.db');
+
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  return `file:${dbFile}`;
+}
+
 const dbUrl = normalizeTursoUrl(
   process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
 );
 const authToken = cleanEnvValue(
   process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || ''
 );
-
-const candidateUrls = buildCandidateUrls(
+const remoteUrls = buildCandidateUrls(
   process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || ''
 );
-if (dbUrl && !candidateUrls.includes(dbUrl)) {
-  candidateUrls.unshift(dbUrl);
+const localDbUrl = getLocalDbUrl();
+const forceLocalDb = /^(1|true|yes)$/i.test(cleanEnvValue(process.env.FORCE_LOCAL_DB || ''));
+const remoteConnectTimeoutMs = Number(process.env.TURSO_CONNECT_TIMEOUT_MS || 3500);
+
+if (dbUrl && !remoteUrls.includes(dbUrl)) {
+  remoteUrls.unshift(dbUrl);
 }
 
-let dbInitError = null;
 let activeClient = null;
 let clientInitPromise = null;
+let usingLocalFallback = false;
 
-if (!dbUrl || !authToken) {
-  const missing = [];
-  if (!dbUrl) missing.push('TURSO_DATABASE_URL');
-  if (!authToken) missing.push('TURSO_AUTH_TOKEN');
-  dbInitError = new Error(`Missing required Turso environment variable(s): ${missing.join(', ')}`);
-  console.error('[DB CONFIG ERROR]', dbInitError.message);
+async function executeWithTimeout(client, sql, timeoutMs) {
+  return await Promise.race([
+    client.execute(sql),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Connection timed out after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
 }
 
 async function getClient() {
-  if (dbInitError) {
-    throw dbInitError;
-  }
-
   if (activeClient) {
     return activeClient;
   }
 
   if (!clientInitPromise) {
     clientInitPromise = (async () => {
-      let lastErr = null;
+      let lastRemoteErr = null;
 
-      for (const url of candidateUrls) {
-        try {
-          const client = createClient({ url, authToken });
-          await client.execute('SELECT 1');
-          activeClient = client;
-          console.log(`[DB] Connected using ${url.replace(/:\/\/.*@/, '://***@')}`);
-          return activeClient;
-        } catch (err) {
-          lastErr = err;
-          const cause = err?.cause?.message || err?.cause || 'no-cause';
-          console.error(`[DB CONNECT FAILED] ${url}: ${err.message} | cause: ${cause}`);
+      if (!forceLocalDb && dbUrl && authToken) {
+        for (const url of remoteUrls) {
+          try {
+            const client = createClient({ url, authToken });
+            await executeWithTimeout(client, 'SELECT 1', remoteConnectTimeoutMs);
+            activeClient = client;
+            usingLocalFallback = false;
+            console.log(`[DB] Connected using ${url.replace(/:\/\/.*@/, '://***@')}`);
+            return activeClient;
+          } catch (err) {
+            lastRemoteErr = err;
+            const cause = err?.cause?.message || err?.cause || 'no-cause';
+            console.error(`[DB CONNECT FAILED] ${url}: ${err.message} | cause: ${cause}`);
+          }
         }
       }
 
-      throw new Error(lastErr?.message || 'Unable to connect to Turso with all URL variants.');
+      if (forceLocalDb) {
+        console.log('[DB] FORCE_LOCAL_DB enabled, skipping Turso connection attempts.');
+      }
+
+      try {
+        const localClient = createClient({ url: localDbUrl });
+        await localClient.execute('SELECT 1');
+        activeClient = localClient;
+        usingLocalFallback = true;
+        console.log(`[DB] Using local fallback database at ${localDbUrl}`);
+        return activeClient;
+      } catch (fallbackErr) {
+        const remoteMessage = lastRemoteErr?.message || 'Unable to connect to Turso with all URL variants.';
+        throw new Error(`${remoteMessage} Local fallback also failed: ${fallbackErr.message}`);
+      }
     })();
   }
 
-  try {
-    return await clientInitPromise;
-  } catch (err) {
-    dbInitError = err;
-    throw err;
-  }
+  return clientInitPromise;
 }
 
 const db = {
@@ -158,22 +177,51 @@ const db = {
   }
 };
 
-// Create tables async
 export async function initializeDatabase() {
-  if (dbInitError) {
-    throw dbInitError;
-  }
-
   await getClient();
 
-  // Graceful migration script for profile pictures
   try {
     await db.execute('ALTER TABLE users ADD COLUMN profile_picture TEXT');
-  } catch (err) {
-    // Ignore error if column already exists (e.g. duplicate column name)
+  } catch {
+    // Ignore if the column already exists.
   }
 
-  // Idempotent migration for users.role CHECK constraint to include driver/admin.
+  try {
+    await db.execute('ALTER TABLE trips ADD COLUMN custom_name TEXT');
+  } catch {
+    // Ignore if the column already exists.
+  }
+
+  try {
+    await db.execute('ALTER TABLE trips ADD COLUMN custom_lat REAL');
+  } catch {
+    // Ignore if the column already exists.
+  }
+
+  try {
+    await db.execute('ALTER TABLE trips ADD COLUMN custom_lng REAL');
+  } catch {
+    // Ignore if the column already exists.
+  }
+
+  try {
+    await db.execute('ALTER TABLE trips ADD COLUMN driver_lat REAL');
+  } catch {
+    // Ignore if the column already exists.
+  }
+
+  try {
+    await db.execute('ALTER TABLE trips ADD COLUMN driver_lng REAL');
+  } catch {
+    // Ignore if the column already exists.
+  }
+
+  try {
+    await db.execute('ALTER TABLE trips ADD COLUMN driver_location_updated_at TEXT');
+  } catch {
+    // Ignore if the column already exists.
+  }
+
   const usersTableSqlRes = await db.execute(
     "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'"
   );
@@ -184,7 +232,6 @@ export async function initializeDatabase() {
     await db.execute('PRAGMA foreign_keys = OFF');
 
     try {
-      // Clean up a partially-created temp table from previous failed migrations.
       await db.execute('DROP TABLE IF EXISTS users_new');
 
       await db.executeMultiple(`
@@ -209,7 +256,6 @@ export async function initializeDatabase() {
     }
   }
 
-  // Idempotent migration for bookings.status so waitlisted rows can be stored.
   const bookingsTableSqlRes = await db.execute(
     "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'"
   );
@@ -245,93 +291,102 @@ export async function initializeDatabase() {
     }
   }
 
-  // Enforce the new 15-student capacity for all trips, including older records.
   await db.execute('UPDATE trips SET seats_total = 15 WHERE seats_total IS NULL OR seats_total > 15');
 
   await db.executeMultiple(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    name TEXT NOT NULL,
-    role TEXT DEFAULT 'student' CHECK(role IN ('student', 'driver', 'admin')),
-    warnings INTEGER DEFAULT 0,
-    banned_until TEXT,
-    profile_picture TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT DEFAULT 'student' CHECK(role IN ('student', 'driver', 'admin')),
+      warnings INTEGER DEFAULT 0,
+      banned_until TEXT,
+      profile_picture TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
 
-  CREATE TABLE IF NOT EXISTS pickup_points (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    lat REAL NOT NULL,
-    lng REAL NOT NULL,
-    order_index INTEGER DEFAULT 0,
-    eta_minutes INTEGER DEFAULT 0
-  );
+    CREATE TABLE IF NOT EXISTS pickup_points (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      order_index INTEGER DEFAULT 0,
+      eta_minutes INTEGER DEFAULT 0
+    );
 
-  CREATE TABLE IF NOT EXISTS time_slots (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    hour INTEGER NOT NULL UNIQUE,
-    label TEXT NOT NULL,
-    is_active INTEGER DEFAULT 1
-  );
+    CREATE TABLE IF NOT EXISTS time_slots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      hour INTEGER NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1
+    );
 
-  CREATE TABLE IF NOT EXISTS trips (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    direction TEXT NOT NULL CHECK(direction IN ('to_42', 'from_42')),
-    date TEXT NOT NULL,
-    time_slot_id INTEGER,
-    calculated_departure TEXT,
-    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'started', 'completed')),
-    qr_token TEXT,
-    seats_total INTEGER DEFAULT 15,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (time_slot_id) REFERENCES time_slots(id)
-  );
+    CREATE TABLE IF NOT EXISTS trips (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      direction TEXT NOT NULL CHECK(direction IN ('to_42', 'from_42')),
+      date TEXT NOT NULL,
+      time_slot_id INTEGER,
+      calculated_departure TEXT,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'started', 'completed')),
+      qr_token TEXT,
+      seats_total INTEGER DEFAULT 15,
+      custom_name TEXT,
+      custom_lat REAL,
+      custom_lng REAL,
+      driver_lat REAL,
+      driver_lng REAL,
+      driver_location_updated_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (time_slot_id) REFERENCES time_slots(id)
+    );
 
-  CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    trip_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    pickup_point_id INTEGER NOT NULL,
-    status TEXT DEFAULT 'booked' CHECK(status IN ('booked', 'confirmed', 'attended', 'no_show', 'cancelled')),
-    booked_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (trip_id) REFERENCES trips(id),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (pickup_point_id) REFERENCES pickup_points(id),
-    UNIQUE(trip_id, user_id)
-  );
+    CREATE TABLE IF NOT EXISTS bookings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trip_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      pickup_point_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'booked' CHECK(status IN ('booked', 'confirmed', 'attended', 'no_show', 'cancelled')),
+      booked_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (trip_id) REFERENCES trips(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (pickup_point_id) REFERENCES pickup_points(id),
+      UNIQUE(trip_id, user_id)
+    );
 
-  CREATE TABLE IF NOT EXISTS notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    message TEXT NOT NULL,
-    is_read INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
 
-  CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    endpoint TEXT NOT NULL UNIQUE,
-    p256dh TEXT NOT NULL,
-    auth TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  );
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
 
-  CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(date);
-  CREATE INDEX IF NOT EXISTS idx_trips_direction ON trips(direction);
-  CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
-  CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
-  CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
-  CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_uniqueness ON trips(direction, date, time_slot_id);
+    CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(date);
+    CREATE INDEX IF NOT EXISTS idx_trips_direction ON trips(direction);
+    CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
+    CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_uniqueness ON trips(direction, date, time_slot_id);
   `);
+}
+
+export function isUsingLocalFallback() {
+  return usingLocalFallback;
 }
 
 export default db;

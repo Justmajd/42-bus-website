@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../api';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 async function parseResponsePayload(res) {
   const contentType = res.headers.get('content-type') || '';
@@ -70,6 +71,7 @@ export default function AdminUserManagement() {
   const [createForm, setCreateForm] = useState({ name: '', email: '', role: 'student', password: '' });
   const [newPassword, setNewPassword] = useState('');
   const [pictureDraft, setPictureDraft] = useState('');
+  const [pendingConfirmation, setPendingConfirmation] = useState(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -117,20 +119,47 @@ export default function AdminUserManagement() {
 
   const handleBlockToggle = (selectedUser) => {
     const isCurrentlyBanned = !!selectedUser.banned_until;
-    if (confirm(`Are you sure you want to ${isCurrentlyBanned ? 'UNBLOCK' : 'BLOCK'} ${selectedUser.name}?`)) {
-      handleAction(
+    setPendingConfirmation({
+      type: 'block',
+      user: selectedUser,
+      title: `${isCurrentlyBanned ? 'Unblock' : 'Block'} User`,
+      message: `Are you sure you want to ${isCurrentlyBanned ? 'unblock' : 'block'} ${selectedUser.name}?`,
+      confirmText: isCurrentlyBanned ? 'Unblock' : 'Block',
+      danger: !isCurrentlyBanned,
+    });
+  };
+
+  const handleDelete = (selectedUser) => {
+    setPendingConfirmation({
+      type: 'delete',
+      user: selectedUser,
+      title: 'Delete User',
+      message: `Delete ${selectedUser.name} (${selectedUser.email})? This will remove their bookings and notifications.`,
+      confirmText: 'Delete',
+      danger: true,
+    });
+  };
+
+  const confirmPendingAction = async () => {
+    if (!pendingConfirmation) return;
+
+    const selectedUser = pendingConfirmation.user;
+    const isCurrentlyBanned = !!selectedUser.banned_until;
+
+    if (pendingConfirmation.type === 'block') {
+      await handleAction(
         `/api/admin/users/${selectedUser.id}/block`,
         'PATCH',
         { block: !isCurrentlyBanned },
         `User ${isCurrentlyBanned ? 'unblocked' : 'blocked'} successfully.`
       );
     }
-  };
 
-  const handleDelete = (selectedUser) => {
-    if (confirm(`Delete ${selectedUser.name} (${selectedUser.email})? This will remove their bookings and notifications.`)) {
-      handleAction(`/api/admin/users/${selectedUser.id}`, 'DELETE', null, 'User deleted successfully.');
+    if (pendingConfirmation.type === 'delete') {
+      await handleAction(`/api/admin/users/${selectedUser.id}`, 'DELETE', null, 'User deleted successfully.');
     }
+
+    setPendingConfirmation(null);
   };
 
   const submitUserEdit = async () => {
@@ -261,6 +290,16 @@ export default function AdminUserManagement() {
 
   return (
     <div className="page-content container">
+      <ConfirmDialog
+        open={!!pendingConfirmation}
+        title={pendingConfirmation?.title || 'Confirm action'}
+        message={pendingConfirmation?.message || 'Are you sure?'}
+        confirmText={pendingConfirmation?.confirmText || 'Confirm'}
+        danger={!!pendingConfirmation?.danger}
+        onCancel={() => setPendingConfirmation(null)}
+        onConfirm={confirmPendingAction}
+      />
+
       {error && <div className="alert alert-error animate-in"><AlertCircle size={16} /> {error}</div>}
       {success && <div className="alert alert-success animate-in"><CheckCircle size={16} /> {success}</div>}
 

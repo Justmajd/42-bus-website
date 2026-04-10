@@ -104,10 +104,6 @@ router.post('/', authenticateToken, async (req, res) => {
     [trip_id, userId]
   );
   const anyBooking = anyBookingRes.rows[0];
-  
-  if (anyBooking && anyBooking.status !== 'cancelled') {
-    return res.status(409).json({ error: 'You have already booked this trip.' });
-  }
 
   // Implementation of One Active Booking Per Day rule
   const activeBookingForDayRes = await db.execute(`
@@ -141,6 +137,13 @@ router.post('/', authenticateToken, async (req, res) => {
         await db.execute('UPDATE bookings SET status = \'booked\', pickup_point_id = ? WHERE id = ?', [pickup_point_id, anyBooking.id]);
         insertId = anyBooking.id;
         bookingStatus = 'booked';
+      } else if (anyBooking.status === 'cancelled') {
+        bookingStatus = bookedCount >= trip.seats_total ? 'waitlisted' : 'booked';
+        await db.execute(
+          'UPDATE bookings SET status = ?, pickup_point_id = ?, booked_at = datetime(\'now\') WHERE id = ?',
+          [bookingStatus, pickup_point_id, anyBooking.id]
+        );
+        insertId = anyBooking.id;
       } else {
         return res.status(409).json({ error: 'You have already booked this trip.' });
       }
@@ -344,11 +347,19 @@ router.post('/attend', authenticateToken, async (req, res) => {
   // Mark as attended
   await db.execute('UPDATE bookings SET status = \'attended\' WHERE id = ?', [booking.id]);
 
+  const studentRes = await db.execute(
+    'SELECT name, profile_picture FROM users WHERE id = ?',
+    [userId]
+  );
+  const student = studentRes.rows[0] || {};
+
   broadcast('attendance_update', {
     trip_id: tripId,
     user_id: userId,
     booking_id: booking.id,
-    status: 'attended'
+    status: 'attended',
+    student_name: student.name || req.user.name || 'Student',
+    student_picture: student.profile_picture || null
   });
 
   res.json({ message: 'Attendance confirmed! ✅', booking_id: booking.id });

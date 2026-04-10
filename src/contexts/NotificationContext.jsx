@@ -30,6 +30,7 @@ export function NotificationProvider({ children }) {
   const [hiddenNotificationIds, setHiddenNotificationIds] = useState([]);
   const eventSourceRef = useRef(null);
   const pushSubscriptionUserRef = useRef(null);
+  const hiddenNotificationIdsRef = useRef([]);
 
   const preferenceKey = user ? `browser_notifications_enabled_${user.id}` : 'browser_notifications_enabled';
   const hiddenKey = user ? `hidden_notifications_${user.id}` : 'hidden_notifications';
@@ -223,7 +224,7 @@ export function NotificationProvider({ children }) {
     es.addEventListener('notification', (event) => {
       const data = safeParseSSEData(event.data);
       if (!data) return;
-      if (hiddenNotificationIds.includes(data.id)) return;
+      if (hiddenNotificationIdsRef.current.includes(data.id)) return;
       setNotifications(prev => [data, ...prev]);
       setUnreadCount(prev => prev + 1);
       showBrowserNotification(data);
@@ -244,7 +245,7 @@ export function NotificationProvider({ children }) {
     es.addEventListener('attendance_update', (event) => {
       const data = safeParseSSEData(event.data);
       if (!data) return;
-      setTripUpdates(prev => ({ ...prev, ...data }));
+      setTripUpdates(data);
     });
 
     es.onerror = () => {
@@ -255,7 +256,7 @@ export function NotificationProvider({ children }) {
       es.close();
       eventSourceRef.current = null;
     };
-  }, [token, user, showBrowserNotification, hiddenNotificationIds]);
+  }, [token, user, showBrowserNotification]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -295,6 +296,10 @@ export function NotificationProvider({ children }) {
   }, [hiddenKey]);
 
   useEffect(() => {
+    hiddenNotificationIdsRef.current = hiddenNotificationIds;
+  }, [hiddenNotificationIds]);
+
+  useEffect(() => {
     if (!token || !user) return;
     if (browserNotificationPermission !== 'granted') return;
     if (!browserNotificationsEnabled) return;
@@ -312,12 +317,20 @@ export function NotificationProvider({ children }) {
     })
       .then(res => res.ok ? res.json() : [])
       .then(data => {
-        const filtered = data.filter(n => !hiddenNotificationIds.includes(n.id));
+        const filtered = data.filter(n => !hiddenNotificationIdsRef.current.includes(n.id));
         setNotifications(filtered);
         setUnreadCount(filtered.filter(n => !n.is_read).length);
       })
       .catch(() => {});
-  }, [token, hiddenNotificationIds]);
+  }, [token]);
+
+  useEffect(() => {
+    const filtered = notifications.filter(n => !hiddenNotificationIds.includes(n.id));
+    if (filtered.length !== notifications.length) {
+      setNotifications(filtered);
+      setUnreadCount(filtered.filter(n => !n.is_read).length);
+    }
+  }, [hiddenNotificationIds, notifications]);
 
   const markAsRead = useCallback(async (id) => {
     await fetch(`${API_BASE}/api/notifications/${id}/read`, {

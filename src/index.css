@@ -1590,6 +1590,69 @@ h4 { font-size: 0.95rem; }
   max-width: 360px;
 }
 
+.scan-flash-card {
+  position: sticky;
+  top: 74px;
+  z-index: 130;
+  margin: 0 auto 12px;
+  max-width: 440px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: rgba(10, 36, 30, 0.95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.scan-flash-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(16, 185, 129, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d1fae5;
+  background: rgba(16, 185, 129, 0.12);
+  flex-shrink: 0;
+}
+
+.scan-flash-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scan-flash-content {
+  min-width: 0;
+}
+
+.scan-flash-label {
+  font-size: 0.74rem;
+  color: #86efac;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.scan-flash-name {
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #ecfdf5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scan-flash-check {
+  margin-left: auto;
+  color: #34d399;
+  flex-shrink: 0;
+}
+
 @media (min-width: 640px) {
   .toast { left: auto; }
 }
