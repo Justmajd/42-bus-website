@@ -27,10 +27,21 @@ export function NotificationProvider({ children }) {
     return window.Notification.permission;
   });
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(true);
+  const [hiddenNotificationIds, setHiddenNotificationIds] = useState([]);
   const eventSourceRef = useRef(null);
   const pushSubscriptionUserRef = useRef(null);
 
   const preferenceKey = user ? `browser_notifications_enabled_${user.id}` : 'browser_notifications_enabled';
+  const hiddenKey = user ? `hidden_notifications_${user.id}` : 'hidden_notifications';
+
+  const persistHiddenIds = useCallback((ids) => {
+    setHiddenNotificationIds(ids);
+    try {
+      window.localStorage.setItem(hiddenKey, JSON.stringify(ids));
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [hiddenKey]);
 
   function base64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -116,20 +127,23 @@ export function NotificationProvider({ children }) {
     }
 
     try {
-      const registration = await navigator.serviceWorker.getRegistration('/sw.js')
-        || await navigator.serviceWorker.getRegistration();
-      const subscription = await registration?.pushManager.getSubscription();
+      // Remove all server-side subscriptions for this user.
+      await fetch(`${API_BASE}/api/notifications/push/subscribe`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({})
+      });
 
-      if (subscription) {
-        await fetch(`${API_BASE}/api/notifications/push/subscribe`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ endpoint: subscription.endpoint })
-        });
-        await subscription.unsubscribe();
+      // Unsubscribe from all local service worker registrations.
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+          await subscription.unsubscribe();
+        }
       }
     } catch {
       // Ignore unsubscribe failures; local preference still prevents popups.
@@ -209,6 +223,7 @@ export function NotificationProvider({ children }) {
     es.addEventListener('notification', (event) => {
       const data = safeParseSSEData(event.data);
       if (!data) return;
+      if (hiddenNotificationIds.includes(data.id)) return;
       setNotifications(prev => [data, ...prev]);
       setUnreadCount(prev => prev + 1);
       showBrowserNotification(data);
@@ -240,7 +255,7 @@ export function NotificationProvider({ children }) {
       es.close();
       eventSourceRef.current = null;
     };
-  }, [token, user, showBrowserNotification]);
+  }, [token, user, showBrowserNotification, hiddenNotificationIds]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -263,6 +278,23 @@ export function NotificationProvider({ children }) {
   }, [preferenceKey, browserNotificationPermission]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const stored = window.localStorage.getItem(hiddenKey);
+      if (!stored) {
+        setHiddenNotificationIds([]);
+        return;
+      }
+
+      const parsed = JSON.parse(stored);
+      setHiddenNotificationIds(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setHiddenNotificationIds([]);
+    }
+  }, [hiddenKey]);
+
+  useEffect(() => {
     if (!token || !user) return;
     if (browserNotificationPermission !== 'granted') return;
     if (!browserNotificationsEnabled) return;
@@ -280,11 +312,12 @@ export function NotificationProvider({ children }) {
     })
       .then(res => res.ok ? res.json() : [])
       .then(data => {
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.is_read).length);
+        const filtered = data.filter(n => !hiddenNotificationIds.includes(n.id));
+        setNotifications(filtered);
+        setUnreadCount(filtered.filter(n => !n.is_read).length);
       })
       .catch(() => {});
-  }, [token]);
+  }, [token, hiddenNotificationIds]);
 
   const markAsRead = useCallback(async (id) => {
     await fetch(`${API_BASE}/api/notifications/${id}/read`, {
@@ -309,8 +342,15 @@ export function NotificationProvider({ children }) {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    setNotifications(prev => prev.filter(n => !n.is_read || n.user_id == null));
-  }, [token]);
+
+    const readIds = notifications.filter((n) => n.is_read).map((n) => n.id);
+    if (readIds.length) {
+      const merged = Array.from(new Set([...hiddenNotificationIds, ...readIds]));
+      persistHiddenIds(merged);
+    }
+
+    setNotifications(prev => prev.filter(n => !n.is_read));
+  }, [token, notifications, hiddenNotificationIds, persistHiddenIds]);
 
   return (
     <NotificationContext.Provider value={{

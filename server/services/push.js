@@ -50,7 +50,10 @@ export async function savePushSubscription(userId, subscription) {
 }
 
 export async function removePushSubscription(userId, endpoint) {
-  if (!endpoint) return;
+  if (!endpoint) {
+    await db.execute('DELETE FROM push_subscriptions WHERE user_id = ?', [userId]);
+    return;
+  }
 
   await db.execute(
     `DELETE FROM push_subscriptions
