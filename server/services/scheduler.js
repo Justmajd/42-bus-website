@@ -49,7 +49,8 @@ export async function generateNextDayTrip(oldTrip) {
 }
 
 async function checkTripExpiry(now) {
-  // A trip expires 1 hour after its calculated_departure if not manually completed
+  // A trip expires 1 hour after its calculated_departure.
+  // Only trips that actually started should become completed.
   const expiryTime = new Date(now.getTime() - 60 * 60 * 1000);
   const cutoffStr = getAmmanDateTimeString(expiryTime);
 
@@ -62,12 +63,21 @@ async function checkTripExpiry(now) {
   `, [cutoffStr]);
 
   for (const trip of expiredTripsRes.rows) {
-    await db.execute('UPDATE trips SET status = \'completed\' WHERE id = ?', [trip.id]);
-    broadcast('trip_update', { trip_id: trip.id, status: 'completed' });
-    console.log(`⏳ Trip ${trip.id} elapsed. Marked completed.`);
-    
-    // Auto-generate tomorrow's slot immediately
-    await generateNextDayTrip(trip);
+    if (trip.status === 'started') {
+      await db.execute('UPDATE trips SET status = \'completed\' WHERE id = ?', [trip.id]);
+      broadcast('trip_update', { trip_id: trip.id, status: 'completed' });
+      console.log(`⏳ Trip ${trip.id} elapsed after starting. Marked completed.`);
+
+      // Auto-generate tomorrow's slot immediately
+      await generateNextDayTrip(trip);
+      continue;
+    }
+
+    // Trips that never started should be removed instead of counted as completed.
+    await db.execute('DELETE FROM bookings WHERE trip_id = ?', [trip.id]);
+    await db.execute('DELETE FROM trips WHERE id = ?', [trip.id]);
+    broadcast('trip_update', { trip_id: trip.id, status: 'deleted' });
+    console.log(`🗑️ Trip ${trip.id} expired without starting. Removed.`);
   }
 }
 

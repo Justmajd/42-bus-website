@@ -80,7 +80,7 @@ export default function AdminDashboard() {
           <div className="stat-grid mb-4">
             <div className="stat-card" style={{ background: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
               <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>{stats.totalRides}</div>
-              <div className="stat-label">Total Rides Completed</div>
+              <div className="stat-label">Total Rides Started / Completed</div>
             </div>
             <div className="stat-card" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
               <div className="stat-value" style={{ color: 'var(--accent-emerald)' }}>{stats.totalStudents}</div>

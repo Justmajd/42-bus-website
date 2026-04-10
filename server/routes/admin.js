@@ -9,7 +9,7 @@ const ALLOWED_ROLES = new Set(['student', 'driver', 'admin']);
 // Get Analytics Dashboard
 router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const totalRidesRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status = 'completed'");
+    const totalRidesRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status IN ('started', 'completed')");
     const totalStudentsRes = await db.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'");
     
     // Most popular timeslots
