@@ -110,7 +110,9 @@ export default function StudentDashboard() {
         }
         throw new Error(data.error);
       }
-      setSuccess('Ride booked successfully! 🎉');
+      setSuccess(data.status === 'waitlisted'
+        ? 'You were added to the waitlist. We will notify you if a seat opens.'
+        : 'Ride booked successfully! 🎉');
       setTimeout(() => setSuccess(''), 3000);
       fetchData();
     } catch (err) {
@@ -308,7 +310,7 @@ export default function StudentDashboard() {
                       )}
 
                       {/* Booking Form */}
-                      {!alreadyBooked && available > 0 && trip.status !== 'started' && trip.status !== 'completed' && (
+                      {!alreadyBooked && trip.status !== 'started' && trip.status !== 'completed' && (
                         <div className="trip-booking-form">
                           {hasActiveBookingToday ? (
                             <div className="alert alert-warning" style={{ fontSize: '0.8rem', width: '100%', marginBottom: 0 }}>
@@ -335,8 +337,13 @@ export default function StudentDashboard() {
                                 onClick={() => handleBook(trip.id)}
                                 disabled={actionLoading === trip.id}
                               >
-                                {actionLoading === trip.id ? '...' : 'Book'}
+                                {actionLoading === trip.id ? '...' : available > 0 ? 'Book' : 'Join Waitlist'}
                               </button>
+                              {available <= 0 && (
+                                <div className="alert alert-info" style={{ fontSize: '0.8rem', width: '100%', marginTop: 8, marginBottom: 0 }}>
+                                  This trip is full. Joining the waitlist will notify you if a seat opens.
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
@@ -348,11 +355,6 @@ export default function StudentDashboard() {
                         </div>
                       )}
 
-                      {available <= 0 && !alreadyBooked && (
-                        <div className="alert alert-warning mt-4" style={{ marginBottom: 0, fontSize: '0.8rem' }}>
-                          <AlertCircle size={14} /> No seats available
-                        </div>
-                      )}
                     </div>
                   );
                 })
@@ -374,7 +376,7 @@ export default function StudentDashboard() {
           <div className="glass-panel">
             <h2><Users size={20} /> My Bookings</h2>
             
-            {myBookings.length === 0 ? (
+                      {myBookings.length === 0 ? (
               <div className="empty-state">
                 <Calendar size={48} />
                 <p>No bookings yet. Book a ride!</p>
@@ -392,7 +394,7 @@ export default function StudentDashboard() {
                           <Clock size={14} /> {booking.time_label}
                         </div>
                       </div>
-                      {getStatusBadge(booking.trip_status)}
+                        {getStatusBadge(booking.status === 'waitlisted' ? 'waitlisted' : booking.trip_status)}
                     </div>
 
                     <div className="card-body">
@@ -409,7 +411,8 @@ export default function StudentDashboard() {
                     <div className="card-footer">
                       <div className="flex items-center gap-2" style={{ fontSize: '0.8rem' }}>
                         <span className={`status-dot ${booking.trip_status}`}></span>
-                        {booking.status === 'attended' ? 'Attended ✅' : 
+                        {booking.status === 'waitlisted' ? 'Waitlisted' :
+                         booking.status === 'attended' ? 'Attended ✅' : 
                          booking.trip_status === 'confirmed' ? 'Confirmed' : 
                          booking.trip_status === 'started' ? 'In Progress' : 'Pending'}
                       </div>

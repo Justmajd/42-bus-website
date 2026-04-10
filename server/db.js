@@ -209,6 +209,42 @@ export async function initializeDatabase() {
     }
   }
 
+  // Idempotent migration for bookings.status so waitlisted rows can be stored.
+  const bookingsTableSqlRes = await db.execute(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'bookings'"
+  );
+  const bookingsTableSql = (bookingsTableSqlRes.rows[0]?.sql || '').toLowerCase();
+  const needsBookingsMigration = bookingsTableSql && !bookingsTableSql.includes('waitlisted');
+
+  if (needsBookingsMigration) {
+    await db.execute('PRAGMA foreign_keys = OFF');
+
+    try {
+      await db.execute('DROP TABLE IF EXISTS bookings_new');
+
+      await db.executeMultiple(`
+        CREATE TABLE bookings_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trip_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          pickup_point_id INTEGER NOT NULL,
+          status TEXT DEFAULT 'booked' CHECK(status IN ('booked', 'confirmed', 'attended', 'no_show', 'cancelled', 'waitlisted')),
+          booked_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (trip_id) REFERENCES trips(id),
+          FOREIGN KEY (user_id) REFERENCES users(id),
+          FOREIGN KEY (pickup_point_id) REFERENCES pickup_points(id),
+          UNIQUE(trip_id, user_id)
+        );
+        INSERT INTO bookings_new (id, trip_id, user_id, pickup_point_id, status, booked_at)
+        SELECT id, trip_id, user_id, pickup_point_id, status, booked_at FROM bookings;
+        DROP TABLE bookings;
+        ALTER TABLE bookings_new RENAME TO bookings;
+      `);
+    } finally {
+      await db.execute('PRAGMA foreign_keys = ON');
+    }
+  }
+
   // Enforce the new 15-student capacity for all trips, including older records.
   await db.execute('UPDATE trips SET seats_total = 15 WHERE seats_total IS NULL OR seats_total > 15');
 
