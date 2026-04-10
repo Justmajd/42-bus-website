@@ -49,8 +49,8 @@ export default function Register() {
     <div className="auth-container">
       <div className="auth-card animate-in">
         <div className="auth-logo">
-          <Bus size={32} />
-          42 Bus
+          <img src="/42-logo.png" alt="42 Logo" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+          Bus
         </div>
         <p className="auth-subtitle">Create your account to start booking rides</p>
 

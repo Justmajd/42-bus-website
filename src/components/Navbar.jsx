@@ -16,8 +16,8 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-inner">
         <Link to="/" className="navbar-brand">
-          <Bus size={24} />
-          <span>42 Bus</span>
+          <img src="/42-logo.png" alt="42 Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+          <span>Bus</span>
         </Link>
 
         <div className="navbar-nav">
