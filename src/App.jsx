@@ -8,7 +8,8 @@ import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentProfile from './pages/StudentProfile';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminTripDetail from './pages/AdminTripDetail';
+import DriverDashboard from './pages/DriverDashboard';
+import DriverTripDetail from './pages/DriverTripDetail';
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -29,22 +30,26 @@ function AppRoutes() {
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
         <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
 
-        {/* Student routes */}
+        {/* Dashboard index */}
         <Route path="/" element={
           <ProtectedRoute>
-            {user?.role === 'admin' ? <AdminDashboard /> : <StudentDashboard />}
+            {user?.role === 'admin' ? <AdminDashboard /> 
+             : user?.role === 'driver' ? <DriverDashboard /> 
+             : <StudentDashboard />}
           </ProtectedRoute>
         } />
+        
+        {/* Student routes */}
         <Route path="/profile" element={
           <ProtectedRoute>
             <StudentProfile />
           </ProtectedRoute>
         } />
 
-        {/* Admin routes */}
-        <Route path="/admin/trips/:id" element={
-          <ProtectedRoute adminOnly>
-            <AdminTripDetail />
+        {/* Driver routes */}
+        <Route path="/driver/trips/:id" element={
+          <ProtectedRoute driverOnly>
+            <DriverTripDetail />
           </ProtectedRoute>
         } />
 

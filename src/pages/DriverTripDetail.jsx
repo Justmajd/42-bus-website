@@ -9,7 +9,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import MapView from '../components/MapView';
 import { API_BASE } from '../api';
 
-export default function AdminTripDetail() {
+export default function DriverTripDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -23,7 +23,7 @@ export default function AdminTripDetail() {
 
   const fetchTrip = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/trips/${id}`, { headers });
+      const res = await fetch(`${API_BASE}/api/driver/trips/${id}`, { headers });
       if (res.ok) {
         const data = await res.json();
         setTrip(data);
@@ -61,7 +61,7 @@ export default function AdminTripDetail() {
     if (!confirm(confirmMsg)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/admin/trips/${id}/status`, {
+      const res = await fetch(`${API_BASE}/api/driver/trips/${id}/status`, {
         method: 'PATCH',
         headers,
         body: JSON.stringify({ status })

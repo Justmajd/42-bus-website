@@ -6,11 +6,12 @@ import path from 'path';
 import authRoutes from './routes/auth.js';
 import tripRoutes from './routes/trips.js';
 import bookingRoutes from './routes/bookings.js';
+import driverRoutes from './routes/driver.js';
 import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import { startScheduler } from './services/scheduler.js';
 import { generateQRDataUrl } from './utils/qr.js';
-import { authenticateToken, requireAdmin } from './middleware/auth.js';
+import { authenticateToken, requireDriver } from './middleware/auth.js';
 import db from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/trips', tripRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/driver', driverRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 
@@ -40,7 +42,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // QR code endpoint
-app.get('/api/qr/:tripId', authenticateToken, requireAdmin, async (req, res) => {
+app.get('/api/qr/:tripId', authenticateToken, requireDriver, async (req, res) => {
   const { default: db } = await import('./db.js');
   const result = await db.execute('SELECT qr_token FROM trips WHERE id = ? AND status = \'started\'', [req.params.tripId]);
   const trip = result.rows[0];

@@ -10,6 +10,7 @@ export default function Navbar() {
   if (!user) return null;
 
   const isAdmin = user.role === 'admin';
+  const isDriver = user.role === 'driver';
   const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
 
   return (
@@ -26,7 +27,7 @@ export default function Navbar() {
             <span className="nav-text">Dashboard</span>
           </Link>
           
-          {!isAdmin && (
+          {!isAdmin && !isDriver && (
             <Link to="/profile" className={location.pathname === '/profile' ? 'active' : ''}>
               <User size={16} />
               <span className="nav-text">Profile</span>

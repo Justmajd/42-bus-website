@@ -97,16 +97,33 @@ if (existingSlotsRes.rows[0].count === 0) {
   console.log('⏭️  Time slots already exist');
 }
 
-// Seed admin/driver account
-const adminEmail = 'driver@learner.42.tech';
-const existingAdminRes = await db.execute('SELECT id FROM users WHERE email = ?', [adminEmail]);
-if (!existingAdminRes.rows[0]) {
+// Update old admin to driver if it existed
+await db.execute("UPDATE users SET role = 'driver' WHERE email = 'driver@learner.42.tech'");
+
+// Seed driver account
+const driverEmail = 'driver@learner.42.tech';
+const existingDriverRes = await db.execute('SELECT id FROM users WHERE email = ?', [driverEmail]);
+if (!existingDriverRes.rows[0]) {
   const hash = bcrypt.hashSync('driver123', 10);
   await db.execute(`
     INSERT INTO users (email, password_hash, name, role) 
+    VALUES (?, ?, ?, 'driver')
+  `, [driverEmail, hash, 'Bus Driver']);
+  console.log('✅ Driver account seeded');
+} else {
+  console.log('⏭️  Driver account already exists');
+}
+
+// Seed super admin account
+const adminEmail = 'admin@learner.42.tech';
+const existingAdminRes = await db.execute('SELECT id FROM users WHERE email = ?', [adminEmail]);
+if (!existingAdminRes.rows[0]) {
+  const hash = bcrypt.hashSync('admin123', 10);
+  await db.execute(`
+    INSERT INTO users (email, password_hash, name, role) 
     VALUES (?, ?, ?, 'admin')
-  `, [adminEmail, hash, 'Bus Driver']);
-  console.log('✅ Admin account seeded (driver@learner.42.tech / driver123)');
+  `, [adminEmail, hash, 'Super Admin']);
+  console.log('✅ Admin account seeded (admin@learner.42.tech / admin123)');
 } else {
   console.log('⏭️  Admin account already exists');
 }

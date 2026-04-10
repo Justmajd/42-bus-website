@@ -21,9 +21,15 @@ export function authenticateToken(req, res, next) {
 
 export function requireAdmin(req, res, next) {
   if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required.' });
+    return res.status(403).json({ error: 'Super Admin access required.' });
   }
   next();
 }
 
+export function requireDriver(req, res, next) {
+  if (req.user.role !== 'admin' && req.user.role !== 'driver') {
+    return res.status(403).json({ error: 'Driver access required.' });
+  }
+  next();
+}
 export { JWT_SECRET };

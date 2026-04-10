@@ -173,13 +173,37 @@ export async function initializeDatabase() {
     // Ignore error if column already exists (e.g. duplicate column name)
   }
 
+  // Graceful migration script for new roles
+  try {
+    // Verify if we actually need to migrate (if someone is already 'driver', constraint is already updated)
+    await db.execute('SELECT * FROM users WHERE role = "driver" LIMIT 1');
+  } catch (err) {
+    // If it fails, or if we want to force it, we can just elegantly recreate the table to update CHECK constraint
+    await db.executeMultiple(`
+      CREATE TABLE IF NOT EXISTS users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT DEFAULT 'student' CHECK(role IN ('student', 'driver', 'admin')),
+        warnings INTEGER DEFAULT 0,
+        banned_until TEXT,
+        profile_picture TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      INSERT INTO users_new SELECT id, email, password_hash, name, role, warnings, banned_until, profile_picture, created_at FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+  }
+
   await db.executeMultiple(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     name TEXT NOT NULL,
-    role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
+    role TEXT DEFAULT 'student' CHECK(role IN ('student', 'driver', 'admin')),
     warnings INTEGER DEFAULT 0,
     banned_until TEXT,
     profile_picture TEXT,
