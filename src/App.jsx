@@ -24,7 +24,7 @@ function AppRoutes() {
   }
 
   return (
-    <>
+    <div className={user ? 'app-shell with-sidebar' : 'app-shell'}>
       <Navbar />
       <Routes>
         {/* Public routes */}
@@ -70,7 +70,7 @@ function AppRoutes() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
-    </>
+    </div>
   );
 }
 

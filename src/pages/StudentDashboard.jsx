@@ -167,12 +167,39 @@ export default function StudentDashboard() {
     ['booked', 'confirmed'].includes(b.status)
   );
 
+  const firstName = user?.name?.split(' ')[0] || 'student';
+  const activeBookingsCount = myBookings.filter((b) => ['booked', 'confirmed'].includes(b.status)).length;
+
   if (loading) {
     return <div className="loading-spinner"><div className="spinner"></div></div>;
   }
 
   return (
     <div className="page-content container">
+      <div className="dashboard-topbar">
+        <input
+          type="search"
+          className="dashboard-search"
+          placeholder="Search learners"
+          aria-label="Search learners"
+        />
+      </div>
+
+      <section className="dashboard-hero">
+        <div>
+          <h1 className="hero-title">Welcome home, {firstName}</h1>
+          <p className="hero-subtitle">New day, new challenge. Let&apos;s gear up.</p>
+        </div>
+
+        <div className="hero-profile-card">
+          <div className="hero-avatar">{firstName.charAt(0).toUpperCase()}</div>
+          <div>
+            <div className="hero-name">{user?.name}</div>
+            <div className="hero-progress">Active bookings {activeBookingsCount}</div>
+          </div>
+        </div>
+      </section>
+
       {error && (
         <div className="alert alert-error animate-in">
           <AlertCircle size={16} /> {error}
@@ -184,7 +211,7 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <h1 className="mb-4" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <h1 className="mb-4" style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
         <Bus size={28} /> Book a Ride
       </h1>
 
