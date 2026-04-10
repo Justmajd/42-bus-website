@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart, MapPin, Clock, AlertCircle, BellRing, Send } from 'lucide-react';
+import { BarChart, MapPin, Clock, AlertCircle, Send, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../api';
+import { formatTimeLabel } from '../utils/timeFormat.js';
 
 async function parseResponsePayload(res) {
   const contentType = res.headers.get('content-type') || '';
@@ -35,7 +36,11 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [sendingTestNotification, setSendingTestNotification] = useState(false);
+  const [sendingCustomNotification, setSendingCustomNotification] = useState(false);
+  const [customTitle, setCustomTitle] = useState('');
+  const [customMessage, setCustomMessage] = useState('');
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -43,6 +48,7 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
 
       const statsRes = await fetch(`${API_BASE}/api/admin/stats`, { headers });
       const payload = await parseResponsePayload(statsRes);
@@ -64,6 +70,7 @@ export default function AdminDashboard() {
     try {
       setSendingTestNotification(true);
       setError('');
+      setSuccess('');
 
       const res = await fetch(`${API_BASE}/api/admin/notifications/test`, {
         method: 'POST',
@@ -80,13 +87,50 @@ export default function AdminDashboard() {
         return;
       }
 
-      setError('');
+      setSuccess('Test notification sent to all users.');
     } catch (err) {
       setError(err.message);
     } finally {
       setSendingTestNotification(false);
     }
   }, [headers]);
+
+  const sendCustomNotification = useCallback(async () => {
+    const title = customTitle.trim();
+    const message = customMessage.trim();
+
+    if (!title || !message) {
+      setError('Please provide both a title and a message.');
+      setSuccess('');
+      return;
+    }
+
+    try {
+      setSendingCustomNotification(true);
+      setError('');
+      setSuccess('');
+
+      const res = await fetch(`${API_BASE}/api/admin/notifications/custom`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title, message })
+      });
+
+      const payload = await parseResponsePayload(res);
+      if (!res.ok) {
+        setError(formatApiError('/api/admin/notifications/custom', res, payload));
+        return;
+      }
+
+      setCustomTitle('');
+      setCustomMessage('');
+      setSuccess('Custom notification sent to all users.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSendingCustomNotification(false);
+    }
+  }, [headers, customTitle, customMessage]);
 
   useEffect(() => {
     loadStats();
@@ -97,6 +141,7 @@ export default function AdminDashboard() {
   return (
     <div className="page-content container">
       {error && <div className="alert alert-error animate-in"><AlertCircle size={16} /> {error}</div>}
+      {success && <div className="alert alert-success animate-in"><CheckCircle2 size={16} /> {success}</div>}
 
       <div className="admin-header mb-4" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -111,6 +156,49 @@ export default function AdminDashboard() {
           <Send size={16} />
           {sendingTestNotification ? 'Sending...' : 'Send Test Notification'}
         </button>
+      </div>
+
+      <div className="glass-panel mb-4">
+        <h2 className="mb-3" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Send size={18} /> Send Custom Notification
+        </h2>
+        <div className="form-group">
+          <label className="form-label">Title</label>
+          <input
+            className="form-input"
+            type="text"
+            value={customTitle}
+            onChange={(e) => setCustomTitle(e.target.value)}
+            maxLength={120}
+            placeholder="Enter notification title"
+          />
+        </div>
+        <div className="form-group" style={{ marginBottom: 12 }}>
+          <label className="form-label">Message</label>
+          <textarea
+            className="form-input"
+            value={customMessage}
+            onChange={(e) => setCustomMessage(e.target.value)}
+            maxLength={500}
+            rows={4}
+            placeholder="Write the message that will be sent to all users"
+            style={{ resize: 'vertical', minHeight: 110 }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <small style={{ color: 'var(--text-secondary)' }}>
+            {customTitle.length}/120 title, {customMessage.length}/500 message
+          </small>
+          <button
+            className="btn btn-primary"
+            onClick={sendCustomNotification}
+            disabled={sendingCustomNotification}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <Send size={16} />
+            {sendingCustomNotification ? 'Sending...' : 'Send Custom Notification'}
+          </button>
+        </div>
       </div>
 
       {stats && (
@@ -147,7 +235,7 @@ export default function AdminDashboard() {
               <h2 className="flex items-center gap-2 mb-3"><Clock size={18}/> Popular Timings</h2>
               {stats.popularTimeSlots.map((ts, i) => (
                 <div key={i} className="flex items-center justify-between" style={{ padding: '8px 0', borderBottom: '1px solid var(--border-color)' }}>
-                  <span>{ts.label}</span>
+                  <span>{formatTimeLabel(ts.label)}</span>
                   <span className="badge badge-primary">{ts.trip_count} trips</span>
                 </div>
               ))}

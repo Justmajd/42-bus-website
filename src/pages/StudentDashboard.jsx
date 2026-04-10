@@ -9,6 +9,7 @@ import MapView from '../components/MapView';
 import QRScanner from '../components/QRScanner';
 import { API_BASE } from '../api';
 import { getAmmanDateString } from '../utils/timezone.js';
+import { formatTimeLabel } from '../utils/timeFormat.js';
 
 export default function StudentDashboard() {
   const { token, user } = useAuth();
@@ -271,7 +272,7 @@ export default function StudentDashboard() {
                           </div>
                           <div className="trip-time">
                             <Clock size={18} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                            {trip.time_label}
+                            {formatTimeLabel(trip.time_label)}
                           </div>
                           <div className="trip-date">
                             <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />
@@ -391,7 +392,7 @@ export default function StudentDashboard() {
                           {booking.direction === 'to_42' ? 'Point → 42' : '42 → Point'}
                         </div>
                         <div className="card-title flex items-center gap-2">
-                          <Clock size={14} /> {booking.time_label}
+                          <Clock size={14} /> {formatTimeLabel(booking.time_label)}
                         </div>
                       </div>
                         {getStatusBadge(booking.status === 'waitlisted' ? 'waitlisted' : booking.trip_status)}
@@ -410,7 +411,7 @@ export default function StudentDashboard() {
 
                     <div className="card-footer">
                       <div className="flex items-center gap-2" style={{ fontSize: '0.8rem' }}>
-                        <span className={`status-dot ${booking.trip_status}`}></span>
+                        <span className={`status-dot ${booking.status === 'waitlisted' ? 'waitlisted' : booking.trip_status}`}></span>
                         {booking.status === 'waitlisted' ? 'Waitlisted' :
                          booking.status === 'attended' ? 'Attended ✅' : 
                          booking.trip_status === 'confirmed' ? 'Confirmed' : 

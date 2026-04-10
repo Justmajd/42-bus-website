@@ -71,6 +71,36 @@ router.post('/notifications/test', authenticateToken, requireAdmin, async (req, 
   }
 });
 
+// Send a custom notification to all users
+router.post('/notifications/custom', authenticateToken, requireAdmin, async (req, res) => {
+  const title = String(req.body?.title || '').trim();
+  const message = String(req.body?.message || '').trim();
+
+  if (!title || !message) {
+    return res.status(400).json({ error: 'Title and message are required.' });
+  }
+
+  if (title.length > 120) {
+    return res.status(400).json({ error: 'Title must be 120 characters or less.' });
+  }
+
+  if (message.length > 500) {
+    return res.status(400).json({ error: 'Message must be 500 characters or less.' });
+  }
+
+  try {
+    const notification = await broadcastNotification('admin_custom', title, message);
+    res.status(201).json({
+      success: true,
+      notification,
+      message: 'Custom notification sent to all users.'
+    });
+  } catch (err) {
+    console.error('[ADMIN CUSTOM NOTIFICATION ERROR]', err?.message || err);
+    res.status(500).json({ error: 'Failed to send custom notification.' });
+  }
+});
+
 // Get all users
 router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {

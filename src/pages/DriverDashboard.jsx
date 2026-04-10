@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { API_BASE } from '../api';
+import { formatTimeLabel } from '../utils/timeFormat.js';
 
 export default function DriverDashboard() {
   const { token } = useAuth();
@@ -159,7 +160,7 @@ export default function DriverDashboard() {
                   </div>
                   <div className="trip-time">
                     <Clock size={18} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                    {trip.time_label}
+                    {formatTimeLabel(trip.time_label)}
                   </div>
                   <div className="trip-date">
                     <Calendar size={12} style={{ display: 'inline', marginRight: 4 }} />

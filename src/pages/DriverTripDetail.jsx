@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import MapView from '../components/MapView';
 import { API_BASE } from '../api';
+import { formatTimeLabel } from '../utils/timeFormat.js';
 
 export default function DriverTripDetail() {
   const { id } = useParams();
@@ -111,7 +112,7 @@ export default function DriverTripDetail() {
               )}
             </div>
             <h1 className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-              <Clock size={24} /> {trip.time_label}
+              <Clock size={24} /> {formatTimeLabel(trip.time_label)}
             </h1>
             <div className="flex items-center gap-2 text-muted">
               <Calendar size={14} /> {trip.date}
