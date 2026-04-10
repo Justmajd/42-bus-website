@@ -5,6 +5,33 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../api';
 
+async function parseResponsePayload(res) {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+function formatApiError(path, res, payload) {
+  if (payload && typeof payload === 'object' && payload.error) {
+    return `${path} failed (${res.status}): ${payload.error}`;
+  }
+  if (typeof payload === 'string' && payload.trim()) {
+    return `${path} failed (${res.status}): ${payload.trim()}`;
+  }
+  return `${path} failed (${res.status} ${res.statusText}). Check VITE_API_URL backend endpoint.`;
+}
+
 export default function AdminDashboard() {
   const { token, user } = useAuth();
   const [stats, setStats] = useState(null);
@@ -25,6 +52,7 @@ export default function AdminDashboard() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setError('');
       const [statsRes, usersRes] = await Promise.all([
         fetch(`${API_BASE}/api/admin/stats`, { headers }),
         fetch(`${API_BASE}/api/admin/users`, { headers })
@@ -34,7 +62,20 @@ export default function AdminDashboard() {
         setStats(await statsRes.json());
         setStudents(await usersRes.json());
       } else {
-        setError('Failed to load admin data.');
+        const [statsPayload, usersPayload] = await Promise.all([
+          parseResponsePayload(statsRes),
+          parseResponsePayload(usersRes)
+        ]);
+
+        const reasons = [];
+        if (!statsRes.ok) {
+          reasons.push(formatApiError('/api/admin/stats', statsRes, statsPayload));
+        }
+        if (!usersRes.ok) {
+          reasons.push(formatApiError('/api/admin/users', usersRes, usersPayload));
+        }
+
+        setError(reasons.join(' | '));
       }
     } catch (err) {
       setError(err.message);
@@ -50,8 +91,10 @@ export default function AdminDashboard() {
       const res = await fetch(`${API_BASE}/api/admin/users/${endpoint}`, {
         method: 'PATCH', headers, body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await parseResponsePayload(res);
+      if (!res.ok) {
+        throw new Error(formatApiError(`/api/admin/users/${endpoint}`, res, data));
+      }
       
       setSuccess(successMsg);
       setTimeout(() => setSuccess(''), 4000);
