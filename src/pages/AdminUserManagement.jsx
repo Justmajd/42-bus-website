@@ -56,6 +56,7 @@ export default function AdminUserManagement() {
   const { token } = useAuth();
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -243,8 +244,10 @@ export default function AdminUserManagement() {
   };
 
   const filteredUsers = users.filter(item => {
+    const matchesRole = roleFilter === 'all' || item.role === roleFilter;
     const q = search.toLowerCase();
-    return item.name.toLowerCase().includes(q) || item.email.toLowerCase().includes(q);
+    const matchesSearch = item.name.toLowerCase().includes(q) || item.email.toLowerCase().includes(q);
+    return matchesRole && matchesSearch;
   });
 
   if (loading) return <div className="loading-spinner"><div className="spinner"></div></div>;
@@ -277,6 +280,20 @@ export default function AdminUserManagement() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          {['all', 'admin', 'driver', 'student'].map(role => (
+            <button
+              key={role}
+              type="button"
+              className={`btn btn-sm ${roleFilter === role ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setRoleFilter(role)}
+              style={{ textTransform: 'capitalize' }}
+            >
+              {role}
+            </button>
+          ))}
         </div>
 
         <div className="student-list" style={{ maxHeight: '640px', overflowY: 'auto', paddingRight: '4px' }}>
