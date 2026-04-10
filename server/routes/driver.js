@@ -34,6 +34,9 @@ function shouldHideTripForDriver(trip, isAdmin) {
   if (isAdmin) return false;
   if (!trip || trip.direction !== 'from_42') return false;
 
+  // Keep custom trips visible; cutoff applies only to scheduled slot trips.
+  if (!trip.time_slot_id) return false;
+
   const departureHour = getDepartureHour(trip);
   return departureHour != null && departureHour < 15;
 }

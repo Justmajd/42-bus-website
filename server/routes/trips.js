@@ -60,6 +60,11 @@ router.get('/', authenticateToken, async (req, res) => {
       return true;
     }
 
+    // Keep custom trips visible; cutoff applies only to scheduled slot trips.
+    if (!trip.time_slot_id) {
+      return true;
+    }
+
     const departureHour = getDepartureHour(trip);
     if (departureHour == null) {
       return true;
