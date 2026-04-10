@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { broadcast } from '../services/notifier.js';
-import { getAmmanDate } from '../utils/timezone.js';
+import { broadcast, createNotification } from '../services/notifier.js';
+import { getAmmanDate, getAmmanDateTimeString } from '../utils/timezone.js';
 
 const router = Router();
 
@@ -116,6 +116,42 @@ router.post('/', authenticateToken, async (req, res) => {
     'SELECT COUNT(*) as count FROM bookings WHERE trip_id = ? AND status IN (\'booked\', \'confirmed\', \'attended\')',
     [trip_id]
   );
+
+  // Auto-confirm only when the trip has 8+ bookings and is within 2 hours of departure.
+  const shouldAutoConfirm = trip.status === 'pending'
+    && newCountRes.rows[0].count >= 8
+    && trip.calculated_departure;
+
+  if (shouldAutoConfirm) {
+    const now = getAmmanDate();
+    const departure = new Date(trip.calculated_departure);
+    const autoConfirmWindow = new Date(departure.getTime() - 2 * 60 * 60 * 1000);
+
+    if (now >= autoConfirmWindow && now < departure) {
+    await db.execute('UPDATE trips SET status = \'confirmed\' WHERE id = ?', [trip_id]);
+    await db.execute('UPDATE bookings SET status = \'confirmed\' WHERE trip_id = ? AND status = \'booked\'', [trip_id]);
+
+    const confirmedBookingsRes = await db.execute(
+      'SELECT user_id FROM bookings WHERE trip_id = ? AND status = \'confirmed\'',
+      [trip_id]
+    );
+
+    const timeSlotRes = await db.execute('SELECT label FROM time_slots WHERE id = ?', [trip.time_slot_id]);
+    const timeLabel = timeSlotRes.rows[0]?.label || '';
+    const dirLabel = trip.direction === 'to_42' ? 'Point → 42' : '42 → Point';
+
+    for (const bookingRow of confirmedBookingsRes.rows) {
+      await createNotification(
+        bookingRow.user_id,
+        'trip_confirmed',
+        'Trip Confirmed! 🚌',
+        `Your ${dirLabel} trip (${timeLabel}) on ${trip.date} is confirmed with 8 or more students and will depart as scheduled.`
+      );
+    }
+
+    broadcast('trip_update', { trip_id, status: 'confirmed' });
+    }
+  }
 
   broadcast('seat_update', {
     trip_id,

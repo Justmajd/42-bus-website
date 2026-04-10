@@ -77,14 +77,30 @@ export default function AdminDashboard() {
 
       {stats && (
         <>
-          <div className="stat-grid mb-4">
+          <div className="stat-grid mb-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
             <div className="stat-card" style={{ background: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.2)' }}>
-              <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>{stats.totalRides}</div>
-              <div className="stat-label">Total Rides Started / Completed</div>
+              <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>{stats.startedTrips}</div>
+              <div className="stat-label">Trips Started</div>
             </div>
             <div className="stat-card" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-              <div className="stat-value" style={{ color: 'var(--accent-emerald)' }}>{stats.totalStudents}</div>
-              <div className="stat-label">Total Registered Students</div>
+              <div className="stat-value" style={{ color: 'var(--accent-emerald)' }}>{stats.completedTrips}</div>
+              <div className="stat-label">Trips Completed</div>
+            </div>
+            <div className="stat-card" style={{ background: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+              <div className="stat-value" style={{ color: 'var(--accent-amber)' }}>{stats.pendingTrips}</div>
+              <div className="stat-label">Pending Trips</div>
+            </div>
+            <div className="stat-card" style={{ background: 'rgba(139, 92, 246, 0.1)', borderColor: 'rgba(139, 92, 246, 0.2)' }}>
+              <div className="stat-value" style={{ color: 'var(--accent-purple)' }}>{stats.confirmedTrips}</div>
+              <div className="stat-label">Confirmed Trips</div>
+            </div>
+            <div className="stat-card" style={{ background: 'rgba(14, 165, 233, 0.1)', borderColor: 'rgba(14, 165, 233, 0.2)' }}>
+              <div className="stat-value" style={{ color: '#38bdf8' }}>{stats.activeBookings}</div>
+              <div className="stat-label">Active Bookings</div>
+            </div>
+            <div className="stat-card" style={{ background: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+              <div className="stat-value" style={{ color: 'var(--accent-red)' }}>{stats.bannedStudents}</div>
+              <div className="stat-label">Banned Students</div>
             </div>
           </div>
 

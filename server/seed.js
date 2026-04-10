@@ -142,8 +142,8 @@ if (existingTripsRes.rows[0].count === 0) {
   for (const slot of slots) {
     // Tomorrow's to_42 trips
     await db.execute(`
-      INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO trips (direction, date, time_slot_id, calculated_departure, seats_total, status)
+      VALUES (?, ?, ?, ?, 15, ?)
     `, [
       'to_42', 
       tomorrowStr, 
@@ -156,8 +156,8 @@ if (existingTripsRes.rows[0].count === 0) {
   // Today's from_42 trips
   for (const slot of slots) {
     await db.execute(`
-      INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO trips (direction, date, time_slot_id, calculated_departure, seats_total, status)
+      VALUES (?, ?, ?, ?, 15, ?)
     `, [
       'from_42', 
       todayStr, 

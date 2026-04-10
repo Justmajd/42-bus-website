@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import db from '../db.js';
 import { authenticateToken, JWT_SECRET } from '../middleware/auth.js';
 import { addClient, removeClient } from '../services/notifier.js';
+import { getVapidPublicKey, removePushSubscription, savePushSubscription } from '../services/push.js';
 
 const router = Router();
 
@@ -39,6 +40,33 @@ router.get('/stream', (req, res) => {
     clearInterval(heartbeat);
     removeClient(clientId);
   });
+});
+
+router.get('/push/public-key', authenticateToken, (req, res) => {
+  const publicKey = getVapidPublicKey();
+  if (!publicKey) {
+    return res.status(503).json({ error: 'Push notifications are not configured.' });
+  }
+
+  res.json({ publicKey });
+});
+
+router.post('/push/subscribe', authenticateToken, async (req, res) => {
+  try {
+    const result = await savePushSubscription(req.user.id, req.body?.subscription);
+    res.status(201).json({ message: 'Push subscription saved.', ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Invalid subscription.' });
+  }
+});
+
+router.delete('/push/subscribe', authenticateToken, async (req, res) => {
+  try {
+    await removePushSubscription(req.user.id, req.body?.endpoint);
+    res.json({ message: 'Push subscription removed.' });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Failed to remove subscription.' });
+  }
 });
 
 // Get user notifications

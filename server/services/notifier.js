@@ -1,5 +1,6 @@
 import db from '../db.js';
 import { v4 as uuidv4 } from 'uuid';
+import { sendPushToAll, sendPushToUser } from './push.js';
 
 // Map of clientId -> { userId, res }
 const clients = new Map();
@@ -61,8 +62,10 @@ export async function createNotification(userId, type, title, message) {
 
   if (userId) {
     notifyUser(userId, 'notification', notif);
+    await sendPushToUser(userId, notif);
   } else {
     broadcast('notification', notif);
+    await sendPushToAll(notif);
   }
 
   return notif;
@@ -86,5 +89,6 @@ export async function broadcastNotification(type, title, message) {
   };
 
   broadcast('notification', notif);
+  await sendPushToAll(notif);
   return notif;
 }

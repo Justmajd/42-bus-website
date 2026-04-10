@@ -41,7 +41,7 @@ export async function generateNextDayTrip(oldTrip) {
   if (!existing) {
     const nextDeparture = `${nextDateStr}T${String(slot.hour).padStart(2, '0')}:00:00+03:00`;
     await db.execute(
-      'INSERT INTO trips (direction, date, time_slot_id, calculated_departure, status) VALUES (?, ?, ?, ?, \'pending\')',
+      'INSERT INTO trips (direction, date, time_slot_id, calculated_departure, seats_total, status) VALUES (?, ?, ?, ?, 15, \'pending\')',
       [oldTrip.direction, nextDateStr, slot.id, nextDeparture]
     );
     console.log(`♻️ Auto-generated next-day trip: ${oldTrip.direction} for ${nextDateStr}`);
@@ -81,20 +81,22 @@ async function checkTripExpiry(now) {
   }
 }
 
-// Auto-confirm trips 2 hours before departure
+// Auto-confirm trips when they reach 8 booked students.
 async function checkTripConfirmations(now) {
   const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const nowStr = getAmmanDateTimeString(now);
   const twoHoursStr = getAmmanDateTimeString(twoHoursLater);
 
-  // Find pending trips departing within 2 hours
+  // Find pending trips with enough bookings to auto-confirm.
   const pendingTripsRes = await db.execute(`
     SELECT t.*, ts.label as time_label 
     FROM trips t 
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
     WHERE t.status = 'pending' 
-    AND t.calculated_departure IS NOT NULL 
+    AND t.calculated_departure IS NOT NULL
+    AND t.calculated_departure >= ?
     AND t.calculated_departure <= ?
-  `, [twoHoursStr]);
+  `, [nowStr, twoHoursStr]);
 
   for (const trip of pendingTripsRes.rows) {
     const bookingCountRes = await db.execute(
@@ -102,7 +104,7 @@ async function checkTripConfirmations(now) {
       [trip.id]
     );
 
-    if (bookingCountRes.rows[0].count > 0) {
+    if (bookingCountRes.rows[0].count >= 8) {
       await db.execute('UPDATE trips SET status = \'confirmed\' WHERE id = ?', [trip.id]);
       await db.execute(
         'UPDATE bookings SET status = \'confirmed\' WHERE trip_id = ? AND status = \'booked\'',
@@ -120,7 +122,7 @@ async function checkTripConfirmations(now) {
           b.user_id,
           'trip_confirmed',
           'Trip Confirmed! 🚌',
-          `Your ${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} is confirmed and departing in about 2 hours.`
+          `Your ${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} is confirmed with 8 or more students and will depart as scheduled.`
         );
       }
 

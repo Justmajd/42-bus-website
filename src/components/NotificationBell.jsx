@@ -1,9 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check } from 'lucide-react';
+import { Bell, Check, BellRing } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
 
 export default function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllRead,
+    browserNotificationPermission,
+    requestBrowserNotifications
+  } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef(null);
 
@@ -44,11 +51,18 @@ export default function NotificationBell() {
         <div className="notification-panel">
           <div className="notification-panel-header">
             <h3>Notifications</h3>
-            {unreadCount > 0 && (
-              <button className="btn btn-ghost btn-sm" onClick={markAllRead}>
-                <Check size={14} /> Read all
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {browserNotificationPermission !== 'granted' && browserNotificationPermission !== 'unsupported' && (
+                <button className="btn btn-ghost btn-sm" onClick={requestBrowserNotifications}>
+                  <BellRing size={14} /> Enable alerts
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <button className="btn btn-ghost btn-sm" onClick={markAllRead}>
+                  <Check size={14} /> Read all
+                </button>
+              )}
+            </div>
           </div>
           <div className="notification-panel-body">
             {notifications.length === 0 ? (

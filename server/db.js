@@ -209,6 +209,9 @@ export async function initializeDatabase() {
     }
   }
 
+  // Enforce the new 15-student capacity for all trips, including older records.
+  await db.execute('UPDATE trips SET seats_total = 15 WHERE seats_total IS NULL OR seats_total > 15');
+
   await db.executeMultiple(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -246,7 +249,7 @@ export async function initializeDatabase() {
     calculated_departure TEXT,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'confirmed', 'started', 'completed')),
     qr_token TEXT,
-    seats_total INTEGER DEFAULT 25,
+    seats_total INTEGER DEFAULT 15,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (time_slot_id) REFERENCES time_slots(id)
   );
@@ -275,11 +278,22 @@ export async function initializeDatabase() {
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(date);
   CREATE INDEX IF NOT EXISTS idx_trips_direction ON trips(direction);
   CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
   CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
   CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+  CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_uniqueness ON trips(direction, date, time_slot_id);
   `);
 }

@@ -9,8 +9,12 @@ const ALLOWED_ROLES = new Set(['student', 'driver', 'admin']);
 // Get Analytics Dashboard
 router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const totalRidesRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status IN ('started', 'completed')");
-    const totalStudentsRes = await db.execute("SELECT COUNT(*) as count FROM users WHERE role = 'student'");
+    const startedTripsRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status = 'started'");
+    const completedTripsRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status = 'completed'");
+    const pendingTripsRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status = 'pending'");
+    const confirmedTripsRes = await db.execute("SELECT COUNT(*) as count FROM trips WHERE status = 'confirmed'");
+    const activeBookingsRes = await db.execute("SELECT COUNT(*) as count FROM bookings WHERE status IN ('booked', 'confirmed', 'attended')");
+    const bannedStudentsRes = await db.execute("SELECT COUNT(*) as count FROM users WHERE banned_until IS NOT NULL AND banned_until > datetime('now')");
     
     // Most popular timeslots
     const timeslotsRes = await db.execute(`
@@ -33,8 +37,12 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
     `);
 
     res.json({
-      totalRides: totalRidesRes.rows[0].count,
-      totalStudents: totalStudentsRes.rows[0].count,
+      startedTrips: startedTripsRes.rows[0].count,
+      completedTrips: completedTripsRes.rows[0].count,
+      pendingTrips: pendingTripsRes.rows[0].count,
+      confirmedTrips: confirmedTripsRes.rows[0].count,
+      activeBookings: activeBookingsRes.rows[0].count,
+      bannedStudents: bannedStudentsRes.rows[0].count,
       popularTimeSlots: timeslotsRes.rows,
       popularPickups: pickupsRes.rows
     });
