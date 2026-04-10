@@ -231,14 +231,17 @@ export default function DriverTripDetail() {
               </div>
             ) : (
               <div className="student-list">
-                {trip.bookings.map(booking => (
+                {trip.bookings.map(booking => {
+                  const studentPhoto = booking.student_picture || booking.profile_picture || '';
+
+                  return (
                   <div key={booking.id} className="student-row">
                     <div className="flex items-center gap-2" style={{ flex: 1 }}>
                       <div 
-                        onClick={() => { if (booking.student_picture) setViewingPhoto(booking.student_picture); }}
+                        onClick={() => { if (studentPhoto) setViewingPhoto(studentPhoto); }}
                         style={{
                         width: 34, height: 34, borderRadius: '50%',
-                        overflow: 'hidden', cursor: booking.student_picture ? 'pointer' : 'default',
+                        overflow: 'hidden', cursor: studentPhoto ? 'pointer' : 'default',
                         background: booking.status === 'attended'
                           ? 'linear-gradient(135deg, var(--accent-emerald), #059669)'
                           : 'var(--bg-primary)',
@@ -246,8 +249,8 @@ export default function DriverTripDetail() {
                         fontSize: '0.7rem', fontWeight: 700, color: booking.status === 'attended' ? 'white' : 'var(--text-muted)', flexShrink: 0,
                         border: booking.status === 'attended' ? '2px solid var(--accent-emerald)' : '1px solid var(--border-color)'
                       }}>
-                        {booking.student_picture ? (
-                          <img src={booking.student_picture} alt="Face" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: booking.status === 'attended' ? 0.7 : 1 }} />
+                        {studentPhoto ? (
+                          <img src={studentPhoto} alt="Face" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: booking.status === 'attended' ? 0.7 : 1 }} />
                         ) : (
                           booking.status === 'attended' ? <CheckCircle size={14} color="white" /> : <User size={14} />
                         )}
@@ -264,7 +267,8 @@ export default function DriverTripDetail() {
                       </span>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

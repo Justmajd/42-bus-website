@@ -12,6 +12,7 @@ export default function Navbar() {
   const isAdmin = user.role === 'admin';
   const isDriver = user.role === 'driver';
   const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
+  const profilePhoto = user.profile_picture || '';
 
   return (
     <nav className="navbar">
@@ -52,7 +53,13 @@ export default function Navbar() {
           <NotificationBell />
 
           <div className="nav-user-info">
-            <div className="nav-user-avatar">{initials}</div>
+            <div className="nav-user-avatar">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt={user.name} className="nav-user-avatar-image" />
+              ) : (
+                initials
+              )}
+            </div>
             <span className="nav-text">{user.name}</span>
           </div>
 

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -39,8 +39,33 @@ function createNumberedIcon(count, color = '#3b82f6') {
   });
 }
 
+function MapAutoFit({ positions = [] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!positions.length) return;
+
+    const bounds = L.latLngBounds(positions.map(([lat, lng]) => [lat, lng]));
+    map.fitBounds(bounds, {
+      padding: [36, 36],
+      maxZoom: 13,
+      animate: false,
+    });
+  }, [map, positions]);
+
+  return null;
+}
+
 export default function MapView({ pickupStats = [], height = 350 }) {
   const center = [32.504136859235835, 35.8708342993484]; // 42 campus area
+
+  const mapPositions = useMemo(() => {
+    const normalizedPoints = pickupStats
+      .map((point) => [Number(point.lat), Number(point.lng)])
+      .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+
+    return [center, ...normalizedPoints];
+  }, [pickupStats]);
 
   if (pickupStats.length === 0) return null;
 
@@ -48,10 +73,12 @@ export default function MapView({ pickupStats = [], height = 350 }) {
     <div className="map-container" style={{ height }}>
       <MapContainer
         center={center}
-        zoom={13}
+        zoom={12}
         style={{ height: '100%', width: '100%' }}
         scrollWheelZoom={true}
       >
+        <MapAutoFit positions={mapPositions} />
+
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
