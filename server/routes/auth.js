@@ -79,15 +79,36 @@ router.post('/login', async (req, res) => {
     user: {
       ...payload,
       warnings: user.warnings,
-      banned_until: user.banned_until
+      banned_until: user.banned_until,
+      profile_picture: user.profile_picture
     }
   });
+});
+
+// Update profile picture
+router.post('/me/picture', authenticateToken, async (req, res) => {
+  const { profile_picture } = req.body;
+  if (!profile_picture) {
+    return res.status(400).json({ error: 'Picture payload is required.' });
+  }
+
+  // Enforce ~500KB max limit roughly for Base64 (500,000 * 1.37 = ~685,000 bytes max payload length)
+  if (profile_picture.length > 700000) {
+    return res.status(400).json({ error: 'Picture exceeds 500KB limit.' });
+  }
+
+  await db.execute(
+    'UPDATE users SET profile_picture = ? WHERE id = ?',
+    [profile_picture, req.user.id]
+  );
+
+  res.json({ message: 'Profile picture updated successfully.' });
 });
 
 // Get current user profile
 router.get('/me', authenticateToken, async (req, res) => {
   const userRes = await db.execute(
-    'SELECT id, email, name, role, warnings, banned_until, created_at FROM users WHERE id = ?',
+    'SELECT id, email, name, role, warnings, banned_until, profile_picture, created_at FROM users WHERE id = ?',
     [req.user.id]
   );
   const user = userRes.rows[0];

@@ -71,6 +71,7 @@ router.get('/trips/:id', authenticateToken, requireAdmin, async (req, res) => {
       u.name as student_name,
       u.email as student_email,
       u.warnings as student_warnings,
+      u.profile_picture as student_picture,
       pp.name as pickup_name,
       pp.lat as pickup_lat,
       pp.lng as pickup_lng

@@ -233,14 +233,20 @@ export default function AdminTripDetail() {
                   <div key={booking.id} className="student-row">
                     <div className="flex items-center gap-2" style={{ flex: 1 }}>
                       <div style={{
-                        width: 32, height: 32, borderRadius: '50%',
+                        width: 34, height: 34, borderRadius: '50%',
+                        overflow: 'hidden',
                         background: booking.status === 'attended'
                           ? 'linear-gradient(135deg, var(--accent-emerald), #059669)'
                           : 'var(--bg-primary)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.7rem', fontWeight: 700, color: 'white', flexShrink: 0
+                        fontSize: '0.7rem', fontWeight: 700, color: booking.status === 'attended' ? 'white' : 'var(--text-muted)', flexShrink: 0,
+                        border: booking.status === 'attended' ? '2px solid var(--accent-emerald)' : '1px solid var(--border-color)'
                       }}>
-                        {booking.status === 'attended' ? <CheckCircle size={14} /> : <User size={14} />}
+                        {booking.student_picture ? (
+                          <img src={booking.student_picture} alt="Face" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: booking.status === 'attended' ? 0.7 : 1 }} />
+                        ) : (
+                          booking.status === 'attended' ? <CheckCircle size={14} color="white" /> : <User size={14} />
+                        )}
                       </div>
                       <div>
                         <div className="student-row-name">{booking.student_name}</div>

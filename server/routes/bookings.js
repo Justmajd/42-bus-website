@@ -27,6 +27,11 @@ router.post('/', authenticateToken, async (req, res) => {
     }
   }
 
+  // Block if no profile picture
+  if (!user.profile_picture) {
+    return res.status(403).json({ error: 'IMAGE_REQUIRED' });
+  }
+
   // Get trip
   const tripRes = await db.execute('SELECT * FROM trips WHERE id = ?', [trip_id]);
   const trip = tripRes.rows[0];

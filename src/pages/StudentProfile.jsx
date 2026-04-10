@@ -52,12 +52,55 @@ export default function StudentProfile() {
       {/* Profile Header */}
       <div className="glass-panel mb-4 animate-in">
         <div className="profile-header">
-          <div className="profile-avatar">{initials}</div>
+          <div className="profile-avatar" style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }} onClick={() => document.getElementById('pictureUpload').click()}>
+            {user.profile_picture ? (
+              <img src={user.profile_picture} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              initials
+            )}
+            <input 
+              type="file" 
+              id="pictureUpload" 
+              accept="image/*" 
+              style={{ display: 'none' }} 
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 500 * 1024) {
+                  alert("Image is too large! Maximum allowed size is 500KB.");
+                  return;
+                }
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                  setLoading(true);
+                  try {
+                    const res = await fetch(`${API_BASE}/api/auth/me/picture`, {
+                      method: 'POST',
+                      headers: { ...headers, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ profile_picture: reader.result })
+                    });
+                    if (!res.ok) alert((await res.json()).error);
+                    else refreshUser();
+                  } catch (err) {
+                    alert('Failed to upload picture.');
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }}
+            />
+          </div>
           <div className="profile-info">
             <h2>{user.name}</h2>
             <div className="profile-email flex items-center gap-2">
               <Mail size={14} /> {user.email}
             </div>
+            {!user.profile_picture && (
+              <div style={{ color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '6px', fontWeight: 600 }}>
+                ⚠️ Face picture required for booking
+              </div>
+            )}
           </div>
         </div>
 

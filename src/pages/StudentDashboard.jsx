@@ -10,7 +10,7 @@ import { API_BASE } from '../api';
 import { getAmmanDateString } from '../utils/timezone.js';
 
 export default function StudentDashboard() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { seatUpdates, tripUpdates } = useNotifications();
   const [activeTab, setActiveTab] = useState('to_42');
   const [trips, setTrips] = useState([]);
@@ -66,6 +66,12 @@ export default function StudentDashboard() {
   }, [seatUpdates, tripUpdates]);
 
   const handleBook = async (tripId) => {
+    if (!user?.profile_picture) {
+      setError('You must upload a face picture in your Profile before booking.');
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
+
     const pickup = selectedPickup[tripId];
     if (!pickup) {
       setError('Please select a pickup point.');
@@ -82,7 +88,12 @@ export default function StudentDashboard() {
         body: JSON.stringify({ trip_id: tripId, pickup_point_id: parseInt(pickup) })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        if (data.error === 'IMAGE_REQUIRED') {
+          throw new Error('You must upload a face picture in your Profile before booking.');
+        }
+        throw new Error(data.error);
+      }
       setSuccess('Ride booked successfully! 🎉');
       setTimeout(() => setSuccess(''), 3000);
       fetchData();

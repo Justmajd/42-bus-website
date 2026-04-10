@@ -166,6 +166,13 @@ export async function initializeDatabase() {
 
   await getClient();
 
+  // Graceful migration script for profile pictures
+  try {
+    await db.execute('ALTER TABLE users ADD COLUMN profile_picture TEXT');
+  } catch (err) {
+    // Ignore error if column already exists (e.g. duplicate column name)
+  }
+
   await db.executeMultiple(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,6 +182,7 @@ export async function initializeDatabase() {
     role TEXT DEFAULT 'student' CHECK(role IN ('student', 'admin')),
     warnings INTEGER DEFAULT 0,
     banned_until TEXT,
+    profile_picture TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
