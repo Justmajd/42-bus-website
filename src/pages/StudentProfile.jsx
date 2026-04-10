@@ -52,28 +52,58 @@ export default function StudentProfile() {
               onChange={async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                if (file.size > 500 * 1024) {
-                  alert("Image is too large! Maximum allowed size is 500KB.");
+                
+                // Allow them to pick a photo up to 15MB, since we compress it anyway!
+                if (file.size > 15 * 1024 * 1024) {
+                  alert("Image is way too massive! Please select a standard smartphone photo under 15MB.");
                   return;
                 }
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                  setLoading(true);
-                  try {
-                    const res = await fetch(`${API_BASE}/api/auth/me/picture`, {
-                      method: 'POST',
-                      headers: { ...headers, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ profile_picture: reader.result })
+
+                setLoading(true);
+                try {
+                  // Radically aggressive client-side compression keeping DB footprint totally tiny!
+                  const compressImage = (fileToCompress, maxWidth = 400, quality = 0.7) => {
+                    return new Promise((resolve) => {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        const img = new Image();
+                        img.onload = () => {
+                          const canvas = document.createElement('canvas');
+                          let width = img.width;
+                          let height = img.height;
+
+                          if (width > maxWidth) {
+                             height = Math.round((height * maxWidth) / width);
+                             width = maxWidth;
+                          }
+
+                          canvas.width = width;
+                          canvas.height = height;
+                          const ctx = canvas.getContext('2d');
+                          ctx.drawImage(img, 0, 0, width, height);
+
+                          resolve(canvas.toDataURL('image/jpeg', quality));
+                        };
+                        img.src = event.target.result;
+                      };
+                      reader.readAsDataURL(fileToCompress);
                     });
-                    if (!res.ok) alert((await res.json()).error);
-                    else refreshUser();
-                  } catch (err) {
-                    alert('Failed to upload picture.');
-                  } finally {
-                    setLoading(false);
-                  }
-                };
-                reader.readAsDataURL(file);
+                  };
+
+                  const compressedBase64 = await compressImage(file);
+
+                  const res = await fetch(`${API_BASE}/api/auth/me/picture`, {
+                    method: 'POST',
+                    headers: { ...headers, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ profile_picture: compressedBase64 })
+                  });
+                  if (!res.ok) alert((await res.json()).error);
+                  else refreshUser();
+                } catch (err) {
+                  alert('Failed to upload picture.');
+                } finally {
+                  setLoading(false);
+                }
               }}
             />
           </div>
