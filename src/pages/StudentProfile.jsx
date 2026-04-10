@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, Mail, AlertTriangle, Calendar, Shield, Clock } from 'lucide-react';
+import { User, Mail, AlertTriangle, Calendar, Shield, Clock, Camera, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../api';
 
@@ -7,6 +7,7 @@ export default function StudentProfile() {
   const { user, token, refreshUser } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewingPhoto, setViewingPhoto] = useState(false);
 
   const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -38,7 +39,10 @@ export default function StudentProfile() {
       {/* Profile Header */}
       <div className="glass-panel mb-4 animate-in">
         <div className="profile-header">
-          <div className="profile-avatar" style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }} onClick={() => document.getElementById('pictureUpload').click()}>
+          <div className="profile-avatar" style={{ position: 'relative', overflow: 'hidden', cursor: 'pointer' }} onClick={() => {
+            if (user.profile_picture) setViewingPhoto(true);
+            else document.getElementById('pictureUpload').click();
+          }}>
             {user.profile_picture ? (
               <img src={user.profile_picture} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
@@ -60,6 +64,7 @@ export default function StudentProfile() {
                 }
 
                 setLoading(true);
+                setViewingPhoto(false); // Close modal if open during change
                 try {
                   // Radically aggressive client-side compression keeping DB footprint totally tiny!
                   const compressImage = (fileToCompress, maxWidth = 400, quality = 0.7) => {
@@ -180,6 +185,35 @@ export default function StudentProfile() {
           </div>
         )}
       </div>
+
+      {/* Photo Viewer Modal */}
+      {viewingPhoto && user.profile_picture && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.85)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setViewingPhoto(false)}>
+          <div style={{ position: 'relative', maxWidth: '400px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setViewingPhoto(false)} style={{
+              position: 'absolute', top: '-40px', right: 0,
+              background: 'none', border: 'none', color: 'white', cursor: 'pointer',
+              padding: '8px'
+            }}>
+              <X size={32} />
+            </button>
+            <img src={user.profile_picture} alt="Student Face" style={{ width: '100%', borderRadius: '12px', objectFit: 'contain', maxHeight: '70vh' }} />
+            
+            <button 
+              className="btn btn-primary" 
+              style={{ marginTop: '20px', width: '100%', padding: '14px', fontSize: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }} 
+              onClick={() => document.getElementById('pictureUpload').click()}
+            >
+              <Camera size={20} /> Change Picture
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

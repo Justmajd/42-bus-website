@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Clock, Calendar, Users, MapPin, QrCode,
-  CheckCircle, Play, Flag, User, AlertTriangle
+  CheckCircle, Play, Flag, User, AlertTriangle, X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -17,6 +17,7 @@ export default function AdminTripDetail() {
   const [trip, setTrip] = useState(null);
   const [qrData, setQrData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [viewingPhoto, setViewingPhoto] = useState(null);
 
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -232,9 +233,11 @@ export default function AdminTripDetail() {
                 {trip.bookings.map(booking => (
                   <div key={booking.id} className="student-row">
                     <div className="flex items-center gap-2" style={{ flex: 1 }}>
-                      <div style={{
+                      <div 
+                        onClick={() => { if (booking.student_picture) setViewingPhoto(booking.student_picture); }}
+                        style={{
                         width: 34, height: 34, borderRadius: '50%',
-                        overflow: 'hidden',
+                        overflow: 'hidden', cursor: booking.student_picture ? 'pointer' : 'default',
                         background: booking.status === 'attended'
                           ? 'linear-gradient(135deg, var(--accent-emerald), #059669)'
                           : 'var(--bg-primary)',
@@ -266,6 +269,27 @@ export default function AdminTripDetail() {
           </div>
         </div>
       </div>
+
+      {/* Photo Viewer Modal */}
+      {viewingPhoto && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.85)', zIndex: 9999,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setViewingPhoto(null)}>
+          <div style={{ position: 'relative', maxWidth: '400px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => setViewingPhoto(null)} style={{
+              position: 'absolute', top: '-40px', right: 0,
+              background: 'none', border: 'none', color: 'white', cursor: 'pointer',
+              padding: '8px'
+            }}>
+              <X size={32} />
+            </button>
+            <img src={viewingPhoto} alt="Student Face" style={{ width: '100%', borderRadius: '12px', objectFit: 'contain', maxHeight: '70vh' }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
