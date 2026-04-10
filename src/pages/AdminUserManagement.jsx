@@ -250,6 +250,13 @@ export default function AdminUserManagement() {
     return matchesRole && matchesSearch;
   });
 
+  const roleCounts = {
+    all: users.length,
+    admin: users.filter(item => item.role === 'admin').length,
+    driver: users.filter(item => item.role === 'driver').length,
+    student: users.filter(item => item.role === 'student').length,
+  };
+
   if (loading) return <div className="loading-spinner"><div className="spinner"></div></div>;
 
   return (
@@ -267,7 +274,7 @@ export default function AdminUserManagement() {
       </div>
 
       <div className="glass-panel">
-        <div className="flex items-center justify-between mb-4 flex-wrap" style={{ gap: 16 }}>
+        <div className="flex items-center justify-between mb-3 flex-wrap" style={{ gap: 16 }}>
           <h2 className="flex items-center gap-2"><Users size={20}/> Users</h2>
           <div className="form-group" style={{ margin: 0, width: '100%', maxWidth: '300px', position: 'relative' }}>
             <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -282,16 +289,35 @@ export default function AdminUserManagement() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap mb-4">
+        <div
+          className="flex items-center gap-2 flex-wrap mb-4"
+          style={{
+            padding: '12px',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            background: 'rgba(255,255,255,0.03)'
+          }}
+        >
           {['all', 'admin', 'driver', 'student'].map(role => (
             <button
               key={role}
               type="button"
               className={`btn btn-sm ${roleFilter === role ? 'btn-primary' : 'btn-ghost'}`}
               onClick={() => setRoleFilter(role)}
-              style={{ textTransform: 'capitalize' }}
+              style={{
+                textTransform: 'capitalize',
+                minWidth: 100,
+                justifyContent: 'space-between',
+                background: roleFilter === role ? 'linear-gradient(135deg, var(--accent-blue), #2563eb)' : 'rgba(255,255,255,0.04)',
+                borderColor: roleFilter === role ? 'rgba(59,130,246,0.45)' : 'var(--border-color)',
+                color: roleFilter === role ? 'white' : 'var(--text-primary)',
+                boxShadow: roleFilter === role ? '0 0 0 1px rgba(59,130,246,0.18), 0 10px 24px rgba(59,130,246,0.18)' : 'none'
+              }}
             >
-              {role}
+              <span>{role}</span>
+              <span className="badge" style={{ marginLeft: 8, background: 'rgba(255,255,255,0.12)', color: 'inherit', border: 'none' }}>
+                {roleCounts[role]}
+              </span>
             </button>
           ))}
         </div>
