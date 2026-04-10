@@ -4,6 +4,7 @@ import {
   Search,
   Plus,
   Edit3,
+  ImagePlus,
   Trash2,
   AlertCircle,
   CheckCircle,
@@ -60,12 +61,14 @@ export default function AdminUserManagement() {
   const [success, setSuccess] = useState('');
 
   const [editingUser, setEditingUser] = useState(null);
+  const [editingPictureUser, setEditingPictureUser] = useState(null);
   const [resetPasswordId, setResetPasswordId] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [editForm, setEditForm] = useState({ name: '', email: '', role: 'student' });
   const [createForm, setCreateForm] = useState({ name: '', email: '', role: 'student', password: '' });
   const [newPassword, setNewPassword] = useState('');
+  const [pictureDraft, setPictureDraft] = useState('');
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -195,6 +198,50 @@ export default function AdminUserManagement() {
     }
   };
 
+  const onPictureFileSelected = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file.');
+      return;
+    }
+
+    if (file.size > 500 * 1024) {
+      setError('Image must be 500KB or smaller.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPictureDraft(String(reader.result || ''));
+    };
+    reader.onerror = () => {
+      setError('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitPictureUpdate = async () => {
+    if (!editingPictureUser) return;
+    if (!pictureDraft) {
+      setError('Please choose an image first.');
+      return;
+    }
+
+    const ok = await handleAction(
+      `/api/admin/users/${editingPictureUser.id}`,
+      'PATCH',
+      { profile_picture: pictureDraft },
+      'Profile picture updated.'
+    );
+
+    if (ok) {
+      setEditingPictureUser(null);
+      setPictureDraft('');
+    }
+  };
+
   const filteredUsers = users.filter(item => {
     const q = search.toLowerCase();
     return item.name.toLowerCase().includes(q) || item.email.toLowerCase().includes(q);
@@ -262,6 +309,17 @@ export default function AdminUserManagement() {
                   }}
                 >
                   <Edit3 size={16} />
+                </button>
+
+                <button
+                  title="Change Photo"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setEditingPictureUser(item);
+                    setPictureDraft(item.profile_picture || '');
+                  }}
+                >
+                  <ImagePlus size={16} />
                 </button>
 
                 <button title="Reset Password" className="btn btn-ghost btn-sm" onClick={() => setResetPasswordId(item.id)}>
@@ -344,6 +402,33 @@ export default function AdminUserManagement() {
             <div className="flex gap-2">
               <button className="btn btn-ghost flex-1" onClick={() => setShowCreateModal(false)}>Cancel</button>
               <button className="btn btn-primary flex-1" onClick={submitCreateUser}>Create</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingPictureUser && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="glass-panel animate-in" style={{ width: '90%', maxWidth: '460px' }}>
+            <h3 className="mb-3">Update Profile Picture</h3>
+            <div className="mb-3" style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ width: 120, height: 120, borderRadius: '50%', overflow: 'hidden', border: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {pictureDraft ? (
+                  <img src={pictureDraft} alt={editingPictureUser.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-secondary)' }}>{getInitials(editingPictureUser.name)}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Select Image (max 500KB)</label>
+              <input type="file" accept="image/*" className="form-input" onChange={onPictureFileSelected} />
+            </div>
+
+            <div className="flex gap-2">
+              <button className="btn btn-ghost flex-1" onClick={() => { setEditingPictureUser(null); setPictureDraft(''); }}>Cancel</button>
+              <button className="btn btn-primary flex-1" onClick={submitPictureUpdate}>Save Photo</button>
             </div>
           </div>
         </div>

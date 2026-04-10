@@ -103,12 +103,22 @@ router.patch('/users/:id', authenticateToken, requireAdmin, async (req, res) => 
   const name = req.body?.name != null ? String(req.body.name).trim() : undefined;
   const email = req.body?.email != null ? String(req.body.email).trim().toLowerCase() : undefined;
   const role = req.body?.role != null ? String(req.body.role).trim().toLowerCase() : undefined;
+  const profilePictureRaw = req.body?.profile_picture;
+  const profilePicture = profilePictureRaw != null ? String(profilePictureRaw).trim() : undefined;
 
   if (name === '' || email === '') {
     return res.status(400).json({ error: 'Name and email cannot be empty.' });
   }
   if (role != null && !ALLOWED_ROLES.has(role)) {
     return res.status(400).json({ error: 'Invalid role.' });
+  }
+  if (profilePicture != null && profilePicture !== '') {
+    if (!profilePicture.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Profile picture must be a valid image data URL.' });
+    }
+    if (profilePicture.length > 700000) {
+      return res.status(400).json({ error: 'Picture exceeds 500KB limit.' });
+    }
   }
 
   const updates = [];
@@ -124,6 +134,10 @@ router.patch('/users/:id', authenticateToken, requireAdmin, async (req, res) => 
   if (role != null) {
     updates.push('role = ?');
     values.push(role);
+  }
+  if (profilePicture != null) {
+    updates.push('profile_picture = ?');
+    values.push(profilePicture === '' ? null : profilePicture);
   }
 
   if (!updates.length) {
