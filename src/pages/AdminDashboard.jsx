@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart, MapPin, Clock, AlertCircle } from 'lucide-react';
+import { BarChart, MapPin, Clock, AlertCircle, BellRing, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../api';
 
@@ -35,6 +35,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sendingTestNotification, setSendingTestNotification] = useState(false);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -59,6 +60,34 @@ export default function AdminDashboard() {
     }
   }, [token]);
 
+  const sendTestNotification = useCallback(async () => {
+    try {
+      setSendingTestNotification(true);
+      setError('');
+
+      const res = await fetch(`${API_BASE}/api/admin/notifications/test`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          title: 'Admin Test Notification',
+          message: 'This is a test notification from the admin panel.'
+        })
+      });
+
+      const payload = await parseResponsePayload(res);
+      if (!res.ok) {
+        setError(formatApiError('/api/admin/notifications/test', res, payload));
+        return;
+      }
+
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSendingTestNotification(false);
+    }
+  }, [headers]);
+
   useEffect(() => {
     loadStats();
   }, [loadStats]);
@@ -73,6 +102,15 @@ export default function AdminDashboard() {
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <BarChart size={28} /> Admin Analytics
         </h1>
+        <button
+          className="btn btn-primary"
+          onClick={sendTestNotification}
+          disabled={sendingTestNotification}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+        >
+          <Send size={16} />
+          {sendingTestNotification ? 'Sending...' : 'Send Test Notification'}
+        </button>
       </div>
 
       {stats && (

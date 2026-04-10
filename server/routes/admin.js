@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { broadcastNotification } from '../services/notifier.js';
 
 const router = Router();
 const ALLOWED_ROLES = new Set(['student', 'driver', 'admin']);
@@ -49,6 +50,24 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error('[ADMIN STATS ERROR]', err?.message || err);
     res.status(500).json({ error: 'Failed to generate metrics.' });
+  }
+});
+
+// Send a test notification to all users
+router.post('/notifications/test', authenticateToken, requireAdmin, async (req, res) => {
+  const title = String(req.body?.title || 'Test notification').trim() || 'Test notification';
+  const message = String(req.body?.message || 'This is a test notification for all users.').trim() || 'This is a test notification for all users.';
+
+  try {
+    const notification = await broadcastNotification('admin_test', title, message);
+    res.status(201).json({
+      success: true,
+      notification,
+      message: 'Test notification sent to all users.'
+    });
+  } catch (err) {
+    console.error('[ADMIN TEST NOTIFICATION ERROR]', err?.message || err);
+    res.status(500).json({ error: 'Failed to send test notification.' });
   }
 });
 
