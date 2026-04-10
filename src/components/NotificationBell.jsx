@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check, BellRing } from 'lucide-react';
+import { Bell, Check, BellOff, BellRing } from 'lucide-react';
 import { useNotifications } from '../contexts/NotificationContext';
 
 export default function NotificationBell() {
@@ -8,8 +8,12 @@ export default function NotificationBell() {
     unreadCount,
     markAsRead,
     markAllRead,
+    clearReadNotifications,
     browserNotificationPermission,
-    requestBrowserNotifications
+    browserNotificationsEnabled,
+    requestBrowserNotifications,
+    enableBrowserNotifications,
+    disableBrowserNotifications
   } = useNotifications();
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef(null);
@@ -34,6 +38,8 @@ export default function NotificationBell() {
     return `${Math.floor(hours / 24)}d ago`;
   }
 
+  const hasReadNotifications = notifications.some((n) => n.is_read);
+
   return (
     <div className="notification-wrapper" ref={panelRef}>
       <button
@@ -52,6 +58,16 @@ export default function NotificationBell() {
           <div className="notification-panel-header">
             <h3>Notifications</h3>
             <div className="flex items-center gap-2">
+              {browserNotificationPermission === 'granted' && browserNotificationsEnabled && (
+                <button className="btn btn-ghost btn-sm" onClick={disableBrowserNotifications}>
+                  <BellOff size={14} /> Disable alerts
+                </button>
+              )}
+              {browserNotificationPermission === 'granted' && !browserNotificationsEnabled && (
+                <button className="btn btn-ghost btn-sm" onClick={enableBrowserNotifications}>
+                  <BellRing size={14} /> Enable alerts
+                </button>
+              )}
               {browserNotificationPermission !== 'granted' && browserNotificationPermission !== 'unsupported' && (
                 <button className="btn btn-ghost btn-sm" onClick={requestBrowserNotifications}>
                   <BellRing size={14} /> Enable alerts
@@ -60,6 +76,11 @@ export default function NotificationBell() {
               {unreadCount > 0 && (
                 <button className="btn btn-ghost btn-sm" onClick={markAllRead}>
                   <Check size={14} /> Read all
+                </button>
+              )}
+              {hasReadNotifications && (
+                <button className="btn btn-ghost btn-sm" onClick={clearReadNotifications}>
+                  <BellOff size={14} /> Clear read
                 </button>
               )}
             </div>

@@ -26,8 +26,11 @@ export function NotificationProvider({ children }) {
     if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
     return window.Notification.permission;
   });
+  const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(true);
   const eventSourceRef = useRef(null);
   const pushSubscriptionUserRef = useRef(null);
+
+  const preferenceKey = user ? `browser_notifications_enabled_${user.id}` : 'browser_notifications_enabled';
 
   function base64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -78,6 +81,7 @@ export function NotificationProvider({ children }) {
 
   const showBrowserNotification = useCallback((data) => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (!browserNotificationsEnabled) return;
     if (window.Notification.permission !== 'granted') return;
 
     const title = data?.title || 'Bus Notification';
@@ -94,7 +98,46 @@ export function NotificationProvider({ children }) {
     } catch {
       // Ignore browser notification failures; in-app notifications still work.
     }
-  }, []);
+  }, [browserNotificationsEnabled]);
+
+  const disableBrowserNotifications = useCallback(async () => {
+    if (typeof window === 'undefined') return false;
+
+    setBrowserNotificationsEnabled(false);
+    try {
+      window.localStorage.setItem(preferenceKey, 'false');
+    } catch {
+      // Ignore storage failures.
+    }
+
+    if (!token || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+      pushSubscriptionUserRef.current = null;
+      return true;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.getRegistration('/sw.js')
+        || await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager.getSubscription();
+
+      if (subscription) {
+        await fetch(`${API_BASE}/api/notifications/push/subscribe`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ endpoint: subscription.endpoint })
+        });
+        await subscription.unsubscribe();
+      }
+    } catch {
+      // Ignore unsubscribe failures; local preference still prevents popups.
+    }
+
+    pushSubscriptionUserRef.current = null;
+    return true;
+  }, [preferenceKey, token]);
 
   const requestBrowserNotifications = useCallback(async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -106,6 +149,12 @@ export function NotificationProvider({ children }) {
     setBrowserNotificationPermission(permission);
 
     if (permission === 'granted') {
+      setBrowserNotificationsEnabled(true);
+      try {
+        window.localStorage.setItem(preferenceKey, 'true');
+      } catch {
+        // Ignore storage failures.
+      }
       try {
         await syncPushSubscription();
       } catch {
@@ -114,7 +163,33 @@ export function NotificationProvider({ children }) {
     }
 
     return permission;
-  }, [syncPushSubscription]);
+  }, [preferenceKey, syncPushSubscription]);
+
+  const enableBrowserNotifications = useCallback(async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setBrowserNotificationPermission('unsupported');
+      return 'unsupported';
+    }
+
+    if (window.Notification.permission !== 'granted') {
+      return requestBrowserNotifications();
+    }
+
+    setBrowserNotificationsEnabled(true);
+    try {
+      window.localStorage.setItem(preferenceKey, 'true');
+    } catch {
+      // Ignore storage failures.
+    }
+
+    try {
+      await syncPushSubscription();
+    } catch {
+      // Ignore push setup failure; permission may still allow foreground notifications.
+    }
+
+    return 'granted';
+  }, [preferenceKey, requestBrowserNotifications, syncPushSubscription]);
 
   // Connect SSE
   useEffect(() => {
@@ -173,12 +248,28 @@ export function NotificationProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let enabled = browserNotificationPermission === 'granted';
+    try {
+      const stored = window.localStorage.getItem(preferenceKey);
+      if (stored === 'true') enabled = true;
+      if (stored === 'false') enabled = false;
+    } catch {
+      // Ignore storage access errors.
+    }
+
+    setBrowserNotificationsEnabled(enabled);
+  }, [preferenceKey, browserNotificationPermission]);
+
+  useEffect(() => {
     if (!token || !user) return;
     if (browserNotificationPermission !== 'granted') return;
+    if (!browserNotificationsEnabled) return;
     if (pushSubscriptionUserRef.current === user.id) return;
 
     syncPushSubscription().catch(() => {});
-  }, [token, user, browserNotificationPermission, syncPushSubscription]);
+  }, [token, user, browserNotificationPermission, browserNotificationsEnabled, syncPushSubscription]);
 
   // Fetch initial notifications
   useEffect(() => {
@@ -213,6 +304,14 @@ export function NotificationProvider({ children }) {
     setUnreadCount(0);
   }, [token]);
 
+  const clearReadNotifications = useCallback(async () => {
+    await fetch(`${API_BASE}/api/notifications/read`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setNotifications(prev => prev.filter(n => !n.is_read || n.user_id == null));
+  }, [token]);
+
   return (
     <NotificationContext.Provider value={{
       notifications,
@@ -220,9 +319,13 @@ export function NotificationProvider({ children }) {
       seatUpdates,
       tripUpdates,
       browserNotificationPermission,
+      browserNotificationsEnabled,
       requestBrowserNotifications,
+      enableBrowserNotifications,
+      disableBrowserNotifications,
       markAsRead,
-      markAllRead
+      markAllRead,
+      clearReadNotifications
     }}>
       {children}
     </NotificationContext.Provider>

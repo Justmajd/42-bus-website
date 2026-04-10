@@ -18,7 +18,7 @@ export default function Navbar() {
       <div className="navbar-inner">
         <Link to="/" className="navbar-brand">
           <img src="/42-logo.png" alt="42 Logo" className="navbar-logo" />
-          <span>Bus</span>
+          <span className="navbar-brand-text">Bus</span>
         </Link>
 
         <div className="navbar-nav">

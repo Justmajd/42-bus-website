@@ -105,4 +105,17 @@ router.patch('/read-all', authenticateToken, async (req, res) => {
   res.json({ message: 'All notifications marked as read.' });
 });
 
+// Delete all read personal notifications for current user
+router.delete('/read', authenticateToken, async (req, res) => {
+  const result = await db.execute(
+    'DELETE FROM notifications WHERE user_id = ? AND is_read = 1',
+    [req.user.id]
+  );
+
+  res.json({
+    message: 'Read notifications removed.',
+    deleted: Number(result.rowsAffected || 0)
+  });
+});
+
 export default router;
