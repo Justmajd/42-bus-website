@@ -17,7 +17,7 @@ export default function Navbar() {
     <nav className="navbar">
       <div className="navbar-inner">
         <Link to="/" className="navbar-brand">
-          <img src="/42-logo.png" alt="42 Logo" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+          <img src="/42-logo.png" alt="42 Logo" className="navbar-logo" />
           <span>Bus</span>
         </Link>
 

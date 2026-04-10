@@ -144,7 +144,7 @@ h4 { font-size: 0.95rem; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: 156px;
   gap: 12px;
 }
 
@@ -156,6 +156,13 @@ h4 { font-size: 0.95rem; }
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
+}
+
+.navbar-logo {
+  width: 144px;
+  height: 144px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .navbar-brand svg {
@@ -1304,13 +1311,17 @@ h4 { font-size: 0.95rem; }
 
   .navbar { padding: 0 8px; }
   .navbar-inner {
-    height: 52px;
+    height: 96px;
     gap: 4px;
   }
 
   .navbar-brand {
     font-size: 1rem;
     gap: 6px;
+  }
+  .navbar-logo {
+    width: 84px;
+    height: 84px;
   }
   .navbar-brand svg { width: 20px; height: 20px; }
 
