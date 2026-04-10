@@ -12,23 +12,27 @@ export default function Navbar() {
   const isAdmin = user.role === 'admin';
   const isDriver = user.role === 'driver';
   const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
-  const primaryDestination = isAdmin ? '/admin/stats' : '/';
-  const dashboardActive = (!isAdmin && location.pathname === '/') || (isAdmin && location.pathname.startsWith('/admin/stats'));
 
   return (
-    <aside className="navbar">
+    <nav className="navbar">
       <div className="navbar-inner">
         <Link to="/" className="navbar-brand">
           <img src="/42-logo.png" alt="42 Logo" className="navbar-logo" />
+          <span className="navbar-brand-text">Bus</span>
         </Link>
 
         <div className="navbar-nav">
           <Link
-            to={primaryDestination}
-            className={dashboardActive ? 'active' : ''}
+            to={isAdmin ? '/admin/stats' : '/'}
+            className={
+              (!isAdmin && location.pathname === '/') ||
+              (isAdmin && location.pathname.startsWith('/admin/stats'))
+                ? 'active'
+                : ''
+            }
           >
             <LayoutDashboard size={16} />
-            <span className="nav-text">Home</span>
+            <span className="nav-text">Dashboard</span>
           </Link>
 
           {isAdmin && (
@@ -41,35 +45,22 @@ export default function Navbar() {
           {!isAdmin && !isDriver && (
             <Link to="/profile" className={location.pathname === '/profile' ? 'active' : ''}>
               <User size={16} />
-              <span className="nav-text">Paperwork</span>
+              <span className="nav-text">Profile</span>
             </Link>
           )}
 
-          {isDriver && (
-            <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
-              <Bus size={16} />
-              <span className="nav-text">Trips</span>
-            </Link>
-          )}
-        </div>
-
-        <div className="navbar-footer">
           <NotificationBell />
 
           <div className="nav-user-info">
             <div className="nav-user-avatar">{initials}</div>
-            <div className="nav-user-meta">
-              <span className="nav-text">{user.name}</span>
-              <span className="nav-role">{user.role}</span>
-            </div>
+            <span className="nav-text">{user.name}</span>
           </div>
 
-          <button onClick={logout} title="Logout" className="logout-btn">
+          <button onClick={logout} title="Logout" className="navbar-logout">
             <LogOut size={16} />
-            <span className="nav-text">Logout</span>
           </button>
         </div>
       </div>
-    </aside>
+    </nav>
   );
 }
