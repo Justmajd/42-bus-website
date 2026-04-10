@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
+const ALLOWED_ROLES = new Set(['student', 'driver', 'admin']);
 
 // Get Analytics Dashboard
 router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
@@ -46,7 +47,9 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
 // Get all users
 router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const usersRes = await db.execute("SELECT id, name, email, role, warnings, banned_until, created_at FROM users WHERE role = 'student' ORDER BY created_at DESC");
+    const usersRes = await db.execute(
+      'SELECT id, name, email, role, warnings, banned_until, profile_picture, created_at FROM users ORDER BY created_at DESC'
+    );
     res.json(usersRes.rows);
   } catch (err) {
     console.error('[ADMIN USERS ERROR]', err?.message || err);
@@ -54,16 +57,118 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Create user
+router.post('/users', authenticateToken, requireAdmin, async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  const role = String(req.body?.role || 'student').trim().toLowerCase();
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Name, email, and password are required.' });
+  }
+  if (!ALLOWED_ROLES.has(role)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+
+  const existingRes = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+  if (existingRes.rows[0]) {
+    return res.status(409).json({ error: 'A user with this email already exists.' });
+  }
+
+  try {
+    const hash = bcrypt.hashSync(password, 10);
+    const result = await db.execute(
+      'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
+      [name, email, hash, role]
+    );
+
+    const createdRes = await db.execute(
+      'SELECT id, name, email, role, warnings, banned_until, profile_picture, created_at FROM users WHERE id = ?',
+      [Number(result.lastInsertRowid)]
+    );
+
+    return res.status(201).json(createdRes.rows[0]);
+  } catch (err) {
+    console.error('[ADMIN CREATE USER ERROR]', err?.message || err);
+    return res.status(500).json({ error: 'Failed to create user.' });
+  }
+});
+
 // Update user details (name)
 router.patch('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Name is required' });
-  
+  const name = req.body?.name != null ? String(req.body.name).trim() : undefined;
+  const email = req.body?.email != null ? String(req.body.email).trim().toLowerCase() : undefined;
+  const role = req.body?.role != null ? String(req.body.role).trim().toLowerCase() : undefined;
+
+  if (name === '' || email === '') {
+    return res.status(400).json({ error: 'Name and email cannot be empty.' });
+  }
+  if (role != null && !ALLOWED_ROLES.has(role)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
+  const updates = [];
+  const values = [];
+  if (name != null) {
+    updates.push('name = ?');
+    values.push(name);
+  }
+  if (email != null) {
+    updates.push('email = ?');
+    values.push(email);
+  }
+  if (role != null) {
+    updates.push('role = ?');
+    values.push(role);
+  }
+
+  if (!updates.length) {
+    return res.status(400).json({ error: 'No updates provided.' });
+  }
+
   try {
-    await db.execute('UPDATE users SET name = ? WHERE id = ?', [name, req.params.id]);
+    if (role && req.user.id === Number(req.params.id) && role !== 'admin') {
+      return res.status(400).json({ error: 'You cannot remove your own admin role.' });
+    }
+
+    values.push(req.params.id);
+    await db.execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, values);
     res.json({ success: true });
   } catch (err) {
+    console.error('[ADMIN UPDATE USER ERROR]', err?.message || err);
     res.status(500).json({ error: 'Failed to update user.' });
+  }
+});
+
+// Delete user
+router.delete('/users/:id', authenticateToken, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isFinite(userId)) {
+    return res.status(400).json({ error: 'Invalid user id.' });
+  }
+
+  if (req.user.id === userId) {
+    return res.status(400).json({ error: 'You cannot delete your own account.' });
+  }
+
+  try {
+    const existingRes = await db.execute('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!existingRes.rows[0]) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    await db.execute('DELETE FROM bookings WHERE user_id = ?', [userId]);
+    await db.execute('DELETE FROM notifications WHERE user_id = ?', [userId]);
+    await db.execute('DELETE FROM users WHERE id = ?', [userId]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[ADMIN DELETE USER ERROR]', err?.message || err);
+    res.status(500).json({ error: 'Failed to delete user.' });
   }
 });
 

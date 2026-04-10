@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import StudentProfile from './pages/StudentProfile';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminUserManagement from './pages/AdminUserManagement';
 import DriverDashboard from './pages/DriverDashboard';
 import DriverTripDetail from './pages/DriverTripDetail';
 
@@ -33,9 +34,22 @@ function AppRoutes() {
         {/* Dashboard index */}
         <Route path="/" element={
           <ProtectedRoute>
-            {user?.role === 'admin' ? <AdminDashboard /> 
+            {user?.role === 'admin' ? <Navigate to="/admin/stats" replace /> 
              : user?.role === 'driver' ? <DriverDashboard /> 
              : <StudentDashboard />}
+          </ProtectedRoute>
+        } />
+
+        {/* Admin routes */}
+        <Route path="/admin/stats" element={
+          <ProtectedRoute adminOnly>
+            <AdminDashboard />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/admin/users" element={
+          <ProtectedRoute adminOnly>
+            <AdminUserManagement />
           </ProtectedRoute>
         } />
         
