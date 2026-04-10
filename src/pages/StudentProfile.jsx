@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, Mail, AlertTriangle, Calendar, Camera, Shield, Clock } from 'lucide-react';
+import { User, Mail, AlertTriangle, Calendar, Shield, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import QRScanner from '../components/QRScanner';
 import { API_BASE } from '../api';
 
 export default function StudentProfile() {
   const { user, token, refreshUser } = useAuth();
   const [bookings, setBookings] = useState([]);
-  const [showScanner, setShowScanner] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const headers = { 'Authorization': `Bearer ${token}` };
@@ -26,18 +24,6 @@ export default function StudentProfile() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleScan = async (qrToken) => {
-    const res = await fetch(`${API_BASE}/api/bookings/attend`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ qr_token: qrToken })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    fetchBookings();
-    return data;
   };
 
   if (!user) return null;
@@ -132,24 +118,6 @@ export default function StudentProfile() {
             <div className="stat-label">Warnings</div>
           </div>
         </div>
-      </div>
-
-      {/* QR Scanner */}
-      <div className="glass-panel mb-4 animate-in">
-        <h2 className="flex items-center gap-2 mb-3">
-          <Camera size={20} /> Attendance
-        </h2>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
-          Scan the driver's QR code when your trip starts to confirm your attendance.
-        </p>
-
-        {!showScanner ? (
-          <button className="btn btn-primary btn-block" onClick={() => setShowScanner(true)}>
-            <Camera size={18} /> Open QR Scanner
-          </button>
-        ) : (
-          <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />
-        )}
       </div>
 
       {/* Booking History */}

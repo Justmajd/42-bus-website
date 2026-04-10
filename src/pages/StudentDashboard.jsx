@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   ArrowRight, ArrowLeft, Clock, MapPin, Users, Calendar,
-  Trash2, AlertCircle, CheckCircle, Bus
+  Trash2, AlertCircle, CheckCircle, Bus, Camera
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import MapView from '../components/MapView';
+import QRScanner from '../components/QRScanner';
 import { API_BASE } from '../api';
 import { getAmmanDateString } from '../utils/timezone.js';
 
@@ -21,8 +22,23 @@ export default function StudentDashboard() {
   const [actionLoading, setActionLoading] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const handleScan = async (qrToken) => {
+    const res = await fetch(`${API_BASE}/api/bookings/attend`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ qr_token: qrToken })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    setSuccess('Attendance confirmed successfully! ✅');
+    setTimeout(() => setSuccess(''), 4000);
+    fetchData();
+    return data;
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -142,6 +158,12 @@ export default function StudentDashboard() {
     .filter(b => ['booked', 'confirmed'].includes(b.status))
     .map(b => b.trip_date);
 
+  // Check if user is currently on an active trip and needs to scan attendance
+  const needsAttendance = myBookings.some(b => 
+    b.trip_status === 'started' && 
+    ['booked', 'confirmed'].includes(b.status)
+  );
+
   if (loading) {
     return <div className="loading-spinner"><div className="spinner"></div></div>;
   }
@@ -162,6 +184,33 @@ export default function StudentDashboard() {
       <h1 className="mb-4" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <Bus size={28} /> Book a Ride
       </h1>
+
+      {/* Conditional QR Scanner for active trips */}
+      {needsAttendance && (
+        <div className="glass-panel mb-4 animate-in" style={{ border: '2px solid var(--accent-blue)', boxShadow: '0 0 15px rgba(59, 130, 246, 0.2)' }}>
+          <h2 className="flex items-center gap-2 mb-3" style={{ color: 'var(--accent-blue)' }}>
+            <Camera size={20} /> Action Required: Scan Attendance
+          </h2>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 16 }}>
+            Your trip has started! Please scan the driver's QR code to formally confirm your attendance.
+          </p>
+
+          {!showScanner ? (
+            <button className="btn btn-primary btn-block" onClick={() => setShowScanner(true)}>
+              <Camera size={18} /> Open QR Scanner
+            </button>
+          ) : (
+            <QRScanner onScan={async (token) => {
+              try {
+                await handleScan(token);
+                setShowScanner(false);
+              } catch (err) {
+                setError(err.message);
+              }
+            }} onClose={() => setShowScanner(false)} />
+          )}
+        </div>
+      )}
 
       {/* Direction Tabs */}
       <div className="tabs">
