@@ -98,7 +98,8 @@ router.delete('/mobile/register', authenticateToken, async (req, res) => {
 // Get user notifications
 router.get('/', authenticateToken, async (req, res) => {
   const notificationsRes = await db.execute(`
-    SELECT * FROM notifications 
+    SELECT id, type, title, message, is_read, created_at
+    FROM notifications 
     WHERE user_id = ? OR user_id IS NULL 
     ORDER BY created_at DESC 
     LIMIT 50

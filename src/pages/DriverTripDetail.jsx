@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ArrowRight, Clock, Calendar, Users, MapPin, QrCode,
@@ -6,11 +6,12 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
-import MapView from '../components/MapView';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { API_BASE } from '../api';
 import { formatTimeLabel, formatDateLabel } from '../utils/timeFormat.js';
 import useTripLocationTracking from '../hooks/useTripLocationTracking';
+
+const MapView = lazy(() => import('../components/MapView'));
 
 export default function DriverTripDetail() {
   const { id } = useParams();
@@ -282,7 +283,9 @@ export default function DriverTripDetail() {
               <h2 className="flex items-center gap-2">
                 <MapPin size={20} /> Map
               </h2>
-              <MapView pickupStats={trip.pickup_stats} height={400} />
+              <Suspense fallback={<div className="loading-spinner"><div className="spinner"></div></div>}>
+                <MapView pickupStats={trip.pickup_stats} height={400} />
+              </Suspense>
             </div>
           )}
         </div>

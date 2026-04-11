@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Suspense, lazy, useRef } from 'react';
 import {
   ArrowRight, ArrowLeft, Clock, MapPin, Users, Calendar,
   Trash2, AlertCircle, CheckCircle, Bus, Camera
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
-import MapView from '../components/MapView';
-import QRScanner from '../components/QRScanner';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { API_BASE } from '../api';
 import { formatTimeLabel, formatDateLabel } from '../utils/timeFormat.js';
+
+const MapView = lazy(() => import('../components/MapView'));
+const QRScanner = lazy(() => import('../components/QRScanner'));
 
 export default function StudentDashboard() {
   const { token, user } = useAuth();
@@ -78,12 +79,20 @@ export default function StudentDashboard() {
     setVisibleRegularTripsCount(4);
   }, [activeTab]);
 
-  // React to real-time updates
+  // React to real-time seat updates and trip status changes (not constant location pings)
+  const refetchTimeoutRef = useRef(null);
   useEffect(() => {
     if (Object.keys(seatUpdates).length > 0 || tripUpdates) {
-      fetchData();
+      // Debounce rapid updates to prevent constant refetches
+      if (refetchTimeoutRef.current) clearTimeout(refetchTimeoutRef.current);
+      refetchTimeoutRef.current = setTimeout(() => {
+        fetchData();
+      }, 500);
     }
-  }, [seatUpdates, tripUpdates]);
+    return () => {
+      if (refetchTimeoutRef.current) clearTimeout(refetchTimeoutRef.current);
+    };
+  }, [seatUpdates, tripUpdates, fetchData]);
 
   const handleBook = async (tripId) => {
     if (!user?.profile_picture) {
@@ -155,56 +164,81 @@ export default function StudentDashboard() {
     return 'available';
   };
 
-  // Check if user already booked a trip
-  const isBooked = (tripId) => myBookings.some(b => b.trip_id === tripId && b.status !== 'cancelled');
-
-  // One active booking per day check
-  const activeBookingDates = myBookings
-    .filter(b => ['booked', 'confirmed'].includes(b.status))
-    .map(b => b.trip_date);
-
-  // Check if user is currently on an active trip and needs to scan attendance
-  const needsAttendance = myBookings.some(b => 
-    b.trip_status === 'started' && 
-    ['booked', 'confirmed'].includes(b.status)
+  const bookedTripIds = useMemo(
+    () => new Set(myBookings.filter((booking) => booking.status !== 'cancelled').map((booking) => Number(booking.trip_id))),
+    [myBookings]
   );
 
-  const customTrips = trips.filter((trip) => !trip.time_slot_id);
-  const regularTrips = trips.filter((trip) => !!trip.time_slot_id);
-  const isActiveTrip = (trip) => ['pending', 'confirmed', 'started'].includes(trip.status);
+  const isBooked = useCallback((tripId) => bookedTripIds.has(Number(tripId)), [bookedTripIds]);
 
-  const regularActiveTrips = regularTrips.filter(isActiveTrip);
-  const regularCompletedTrips = regularTrips.filter((trip) => !isActiveTrip(trip));
-  const customActiveTrips = customTrips.filter(isActiveTrip);
-  const customCompletedTrips = customTrips.filter((trip) => !isActiveTrip(trip));
-  const completedTrips = [...regularCompletedTrips, ...customCompletedTrips];
-  const visibleRegularTrips = regularActiveTrips.slice(0, visibleRegularTripsCount);
-
-  const mapTripCandidates = [
-    ...regularActiveTrips,
-    ...customActiveTrips,
-    ...regularCompletedTrips,
-    ...customCompletedTrips
-  ];
-
-  const bookedTripIds = new Set(
-    myBookings
-      .filter((booking) => ['booked', 'confirmed', 'attended'].includes(booking.status))
-      .map((booking) => Number(booking.trip_id))
+  const activeBookingDates = useMemo(
+    () => myBookings.filter((booking) => ['booked', 'confirmed'].includes(booking.status)).map((booking) => booking.trip_date),
+    [myBookings]
   );
 
-  const bookedMapTrips = mapTripCandidates.filter((trip) => bookedTripIds.has(Number(trip.id)));
+  const needsAttendance = useMemo(
+    () => myBookings.some((booking) => booking.trip_status === 'started' && ['booked', 'confirmed'].includes(booking.status)),
+    [myBookings]
+  );
 
-  const mapTrip =
-    bookedMapTrips.find((trip) => trip.status === 'started') ||
-    bookedMapTrips[0] ||
-    mapTripCandidates.find((trip) => trip.status === 'started') ||
-    mapTripCandidates[0] ||
-    null;
+  const {
+    regularActiveTrips,
+    customActiveTrips,
+    completedTrips,
+    visibleRegularTrips,
+    mapTrip,
+    mapDriverLocation
+  } = useMemo(() => {
+    const customTrips = trips.filter((trip) => !trip.time_slot_id);
+    const regularTrips = trips.filter((trip) => !!trip.time_slot_id);
+    const isActiveTrip = (trip) => ['pending', 'confirmed', 'started'].includes(trip.status);
 
-  const mapDriverLocation = mapTrip && bookedTripIds.has(Number(mapTrip.id)) && mapTrip.status === 'started' && Number.isFinite(Number(mapTrip.driver_lat)) && Number.isFinite(Number(mapTrip.driver_lng))
-    ? { lat: Number(mapTrip.driver_lat), lng: Number(mapTrip.driver_lng) }
-    : null;
+    const regularActive = regularTrips.filter(isActiveTrip);
+    const regularCompleted = regularTrips.filter((trip) => !isActiveTrip(trip));
+    const customActive = customTrips.filter(isActiveTrip);
+    const customCompleted = customTrips.filter((trip) => !isActiveTrip(trip));
+    const allCompleted = [...regularCompleted, ...customCompleted];
+    const visibleRegular = regularActive.slice(0, visibleRegularTripsCount);
+
+    const mapTripCandidates = [
+      ...regularActive,
+      ...customActive,
+      ...regularCompleted,
+      ...customCompleted,
+    ];
+
+    const mapEligibleBookedTripIds = new Set(
+      myBookings
+        .filter((booking) => ['booked', 'confirmed', 'attended'].includes(booking.status))
+        .map((booking) => Number(booking.trip_id))
+    );
+
+    const bookedMapTrips = mapTripCandidates.filter((trip) => mapEligibleBookedTripIds.has(Number(trip.id)));
+    const selectedMapTrip =
+      bookedMapTrips.find((trip) => trip.status === 'started') ||
+      bookedMapTrips[0] ||
+      mapTripCandidates.find((trip) => trip.status === 'started') ||
+      mapTripCandidates[0] ||
+      null;
+
+    const selectedMapDriverLocation =
+      selectedMapTrip &&
+      mapEligibleBookedTripIds.has(Number(selectedMapTrip.id)) &&
+      selectedMapTrip.status === 'started' &&
+      Number.isFinite(Number(selectedMapTrip.driver_lat)) &&
+      Number.isFinite(Number(selectedMapTrip.driver_lng))
+        ? { lat: Number(selectedMapTrip.driver_lat), lng: Number(selectedMapTrip.driver_lng) }
+        : null;
+
+    return {
+      regularActiveTrips: regularActive,
+      customActiveTrips: customActive,
+      completedTrips: allCompleted,
+      visibleRegularTrips: visibleRegular,
+      mapTrip: selectedMapTrip,
+      mapDriverLocation: selectedMapDriverLocation,
+    };
+  }, [trips, myBookings, visibleRegularTripsCount]);
 
   if (loading) {
     return <div className="loading-spinner"><div className="spinner"></div></div>;
@@ -256,14 +290,16 @@ export default function StudentDashboard() {
               <Camera size={18} /> Open QR Scanner
             </button>
           ) : (
-            <QRScanner onScan={async (token) => {
-              try {
-                await handleScan(token);
-                setShowScanner(false);
-              } catch (err) {
-                setError(err.message);
-              }
-            }} onClose={() => setShowScanner(false)} />
+            <Suspense fallback={<div className="loading-spinner"><div className="spinner"></div></div>}>
+              <QRScanner onScan={async (token) => {
+                try {
+                  await handleScan(token);
+                  setShowScanner(false);
+                } catch (err) {
+                  setError(err.message);
+                }
+              }} onClose={() => setShowScanner(false)} />
+            </Suspense>
           )}
         </div>
       )}
@@ -687,7 +723,9 @@ export default function StudentDashboard() {
               Live driver location is being shared now.
             </div>
           )}
-          <MapView pickupStats={mapTrip.pickup_stats || []} driverLocation={mapDriverLocation} />
+          <Suspense fallback={<div className="loading-spinner"><div className="spinner"></div></div>}>
+            <MapView pickupStats={mapTrip.pickup_stats || []} driverLocation={mapDriverLocation} />
+          </Suspense>
         </div>
       )}
     </div>

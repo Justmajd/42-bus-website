@@ -4,6 +4,7 @@ import { authenticateToken, requireDriver } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { broadcast, notifyUser, createNotification } from '../services/notifier.js';
 import { generateNextDayTrip } from '../services/scheduler.js';
+import { getCachedTimeSlots, invalidateTimeSlotsCache } from '../services/cache.js';
 import { getAmmanDate, getAmmanDateTimeString } from '../utils/timezone.js';
 
 const router = Router();
@@ -101,14 +102,28 @@ router.get('/trips', authenticateToken, requireDriver, async (req, res) => {
   const isAdmin = req.user?.role === 'admin';
 
   let query = `
+    WITH booked_counts AS (
+      SELECT trip_id, COUNT(*) AS seats_booked
+      FROM bookings
+      WHERE status IN ('booked', 'confirmed', 'attended')
+      GROUP BY trip_id
+    ),
+    attended_counts AS (
+      SELECT trip_id, COUNT(*) AS attended_count
+      FROM bookings
+      WHERE status = 'attended'
+      GROUP BY trip_id
+    )
     SELECT 
       t.*,
       ts.hour,
       ts.label as time_label,
-      (SELECT COUNT(*) FROM bookings WHERE trip_id = t.id AND status IN ('booked', 'confirmed', 'attended')) as seats_booked,
-      (SELECT COUNT(*) FROM bookings WHERE trip_id = t.id AND status = 'attended') as attended_count
+      COALESCE(bc.seats_booked, 0) as seats_booked,
+      COALESCE(ac.attended_count, 0) as attended_count
     FROM trips t
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
+    LEFT JOIN booked_counts bc ON bc.trip_id = t.id
+    LEFT JOIN attended_counts ac ON ac.trip_id = t.id
     WHERE 1=1
   `;
   const params = [];
@@ -144,13 +159,20 @@ router.get('/trips', authenticateToken, requireDriver, async (req, res) => {
 router.get('/trips/:id', authenticateToken, requireDriver, async (req, res) => {
   const isAdmin = req.user?.role === 'admin';
   const tripRes = await db.execute(`
+    WITH booked_counts AS (
+      SELECT trip_id, COUNT(*) AS seats_booked
+      FROM bookings
+      WHERE status IN ('booked', 'confirmed', 'attended')
+      GROUP BY trip_id
+    )
     SELECT 
       t.*,
       ts.hour,
       ts.label as time_label,
-      (SELECT COUNT(*) FROM bookings WHERE trip_id = t.id AND status IN ('booked', 'confirmed', 'attended')) as seats_booked
+      COALESCE(bc.seats_booked, 0) as seats_booked
     FROM trips t
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
+    LEFT JOIN booked_counts bc ON bc.trip_id = t.id
     WHERE t.id = ?
   `, [req.params.id]);
   const trip = tripRes.rows[0];
@@ -356,8 +378,8 @@ router.patch('/trips/:id/location', authenticateToken, requireDriver, async (req
 
 // Manage time slots
 router.get('/time-slots', authenticateToken, requireDriver, async (req, res) => {
-  const slotsRes = await db.execute('SELECT * FROM time_slots ORDER BY hour');
-  res.json(slotsRes.rows);
+  const slots = await getCachedTimeSlots({ activeOnly: false });
+  res.json(slots);
 });
 
 router.post('/time-slots', authenticateToken, requireDriver, async (req, res) => {
@@ -368,6 +390,7 @@ router.post('/time-slots', authenticateToken, requireDriver, async (req, res) =>
       'INSERT OR REPLACE INTO time_slots (hour, label, is_active) VALUES (?, ?, ?)',
       [hour, label, is_active ? 1 : 0]
     );
+    invalidateTimeSlotsCache();
     res.json({ id: Number(result.lastInsertRowid), hour, label, is_active });
   } catch (err) {
     res.status(400).json({ error: 'Failed to update time slot.' });

@@ -28,7 +28,7 @@ router.post('/register', async (req, res) => {
   }
 
   // Hash password and create user
-  const passwordHash = bcrypt.hashSync(password, 10);
+  const passwordHash = await bcrypt.hash(password, 10);
   const result = await db.execute(
     'INSERT INTO users (email, password_hash, name, role) VALUES (?, ?, ?, ?)',
     [email, passwordHash, name, 'student']
@@ -60,7 +60,7 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password.' });
   }
 
-  const validPassword = bcrypt.compareSync(password, user.password_hash);
+  const validPassword = await bcrypt.compare(password, user.password_hash);
   if (!validPassword) {
     return res.status(401).json({ error: 'Invalid email or password.' });
   }

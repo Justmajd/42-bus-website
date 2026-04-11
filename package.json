@@ -27,6 +27,7 @@
     "@capacitor/push-notifications": "^8.0.3",
     "@libsql/client": "0.6.0",
     "bcryptjs": "^3.0.2",
+    "compression": "^1.8.1",
     "concurrently": "^9.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

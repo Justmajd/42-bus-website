@@ -93,56 +93,59 @@ async function checkTripConfirmations(now) {
 
   // Find pending trips with enough bookings to auto-confirm.
   const pendingTripsRes = await db.execute(`
-    SELECT t.*, ts.label as time_label 
+    WITH booked_counts AS (
+      SELECT trip_id, COUNT(*) AS booked_count
+      FROM bookings
+      WHERE status = 'booked'
+      GROUP BY trip_id
+    )
+    SELECT t.*, ts.label as time_label, COALESCE(bc.booked_count, 0) as booked_count
     FROM trips t 
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
+    LEFT JOIN booked_counts bc ON bc.trip_id = t.id
     WHERE t.status = 'pending' 
     AND t.calculated_departure IS NOT NULL
     AND t.calculated_departure >= ?
     AND t.calculated_departure <= ?
+    AND COALESCE(bc.booked_count, 0) >= 8
   `, [nowStr, twoHoursStr]);
 
+  const adminsRes = await db.execute('SELECT id FROM users WHERE role = \'admin\'');
+  const adminIds = adminsRes.rows.map((admin) => admin.id);
+
   for (const trip of pendingTripsRes.rows) {
-    const bookingCountRes = await db.execute(
-      'SELECT COUNT(*) as count FROM bookings WHERE trip_id = ? AND status = \'booked\'',
+    await db.execute('UPDATE trips SET status = \'confirmed\' WHERE id = ?', [trip.id]);
+    await db.execute(
+      'UPDATE bookings SET status = \'confirmed\' WHERE trip_id = ? AND status = \'booked\'',
       [trip.id]
     );
 
-    if (bookingCountRes.rows[0].count >= 8) {
-      await db.execute('UPDATE trips SET status = \'confirmed\' WHERE id = ?', [trip.id]);
-      await db.execute(
-        'UPDATE bookings SET status = \'confirmed\' WHERE trip_id = ? AND status = \'booked\'',
-        [trip.id]
+    const bookingsRes = await db.execute(
+      'SELECT user_id FROM bookings WHERE trip_id = ? AND status = \'confirmed\'',
+      [trip.id]
+    );
+
+    const dirLabel = trip.direction === 'to_42' ? 'Point → 42' : '42 → Point';
+    for (const b of bookingsRes.rows) {
+      await createNotification(
+        b.user_id,
+        'trip_confirmed',
+        'Trip Confirmed! 🚌',
+        `Your ${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} is confirmed with 8 or more students and will depart as scheduled.`
       );
-
-      const bookingsRes = await db.execute(
-        'SELECT user_id FROM bookings WHERE trip_id = ? AND status = \'confirmed\'',
-        [trip.id]
-      );
-
-      const dirLabel = trip.direction === 'to_42' ? 'Point → 42' : '42 → Point';
-      for (const b of bookingsRes.rows) {
-        await createNotification(
-          b.user_id,
-          'trip_confirmed',
-          'Trip Confirmed! 🚌',
-          `Your ${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} is confirmed with 8 or more students and will depart as scheduled.`
-        );
-      }
-
-      const adminsRes = await db.execute('SELECT id FROM users WHERE role = \'admin\'');
-      for (const admin of adminsRes.rows) {
-        await createNotification(
-          admin.id,
-          'trip_confirmed',
-          'Trip Confirmed 📋',
-          `${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} has been confirmed with ${bookingCountRes.rows[0].count} students.`
-        );
-      }
-
-      broadcast('trip_update', { trip_id: trip.id, status: 'confirmed' });
-      console.log(`✅ Trip ${trip.id} auto-confirmed`);
     }
+
+    for (const adminId of adminIds) {
+      await createNotification(
+        adminId,
+        'trip_confirmed',
+        'Trip Confirmed 📋',
+        `${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} has been confirmed with ${trip.booked_count} students.`
+      );
+    }
+
+    broadcast('trip_update', { trip_id: trip.id, status: 'confirmed' });
+    console.log(`✅ Trip ${trip.id} auto-confirmed`);
   }
 }
 

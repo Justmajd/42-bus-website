@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { broadcast, createNotification } from '../services/notifier.js';
+import { isValidPickupPointId } from '../services/cache.js';
 import { getAmmanDate, getAmmanDateTimeString } from '../utils/timezone.js';
 
 const router = Router();
@@ -119,9 +120,9 @@ router.post('/', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'You can only hold one active booking per day. Please complete or cancel your current booking to reserve another.' });
   }
 
-  // Validate pickup point
-  const pointRes = await db.execute('SELECT id FROM pickup_points WHERE id = ?', [pickup_point_id]);
-  if (!pointRes.rows[0]) {
+  // Validate pickup point (cached lookup).
+  const pickupPointExists = await isValidPickupPointId(pickup_point_id);
+  if (!pickupPointExists) {
     return res.status(400).json({ error: 'Invalid pickup point.' });
   }
 
@@ -227,6 +228,12 @@ router.post('/', authenticateToken, async (req, res) => {
 // Get user's bookings
 router.get('/', authenticateToken, async (req, res) => {
   const bookingsRes = await db.execute(`
+    WITH trip_seat_counts AS (
+      SELECT trip_id, COUNT(*) AS seats_booked
+      FROM bookings
+      WHERE status IN ('booked', 'confirmed', 'attended')
+      GROUP BY trip_id
+    )
     SELECT 
       b.*,
       t.direction,
@@ -239,10 +246,11 @@ router.get('/', authenticateToken, async (req, res) => {
       pp.name as pickup_name,
       pp.lat as pickup_lat,
       pp.lng as pickup_lng,
-      (SELECT COUNT(*) FROM bookings WHERE trip_id = t.id AND status IN ('booked', 'confirmed', 'attended')) as seats_booked
+      COALESCE(tsc.seats_booked, 0) as seats_booked
     FROM bookings b
     JOIN trips t ON b.trip_id = t.id
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
+    LEFT JOIN trip_seat_counts tsc ON tsc.trip_id = t.id
     JOIN pickup_points pp ON b.pickup_point_id = pp.id
     WHERE b.user_id = ? AND b.status != 'cancelled'
     ORDER BY t.date DESC, ts.hour DESC

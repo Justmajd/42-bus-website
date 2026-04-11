@@ -58,7 +58,8 @@ function MapAutoFit({ positions = [] }) {
     map.fitBounds(bounds, {
       padding: [36, 36],
       maxZoom: 13,
-      animate: false,
+      animate: true,
+      duration: 0.5,
     });
   }, [map, positions]);
 

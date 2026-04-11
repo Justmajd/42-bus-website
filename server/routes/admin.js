@@ -3,6 +3,7 @@ import db from '../db.js';
 import bcrypt from 'bcryptjs';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { broadcastNotification, broadcast, createNotification } from '../services/notifier.js';
+import { invalidateTimeSlotsCache } from '../services/cache.js';
 import { getAmmanDate, getAmmanDateString, getAmmanDateTimeString } from '../utils/timezone.js';
 
 const router = Router();
@@ -210,6 +211,8 @@ router.post('/trips/reset-window', authenticateToken, requireAdmin, async (req, 
       if (to42Result.deletedTripId) summary.deleted += 1;
       if (to42Result.skippedLocked) summary.skippedLocked += 1;
     }
+
+    invalidateTimeSlotsCache();
 
     return res.status(201).json({
       success: true,

@@ -388,8 +388,14 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(date);
     CREATE INDEX IF NOT EXISTS idx_trips_direction ON trips(direction);
     CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
+    CREATE INDEX IF NOT EXISTS idx_trips_status_departure ON trips(status, calculated_departure);
+    CREATE INDEX IF NOT EXISTS idx_trips_direction_status_departure ON trips(direction, status, calculated_departure);
     CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
+    CREATE INDEX IF NOT EXISTS idx_bookings_trip_status ON bookings(trip_id, status);
+    CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id);
+    CREATE INDEX IF NOT EXISTS idx_bookings_user_status ON bookings(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_mobile_push_tokens_user ON mobile_push_tokens(user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_uniqueness ON trips(direction, date, time_slot_id);

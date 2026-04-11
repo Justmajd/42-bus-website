@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { getCachedPickupPoints, getCachedTimeSlots } from '../services/cache.js';
 
 const router = Router();
 
@@ -36,14 +37,67 @@ async function hasBookedTripForStudent(userId, tripId) {
 
 function sanitizeDriverLocationForStudent(trip, hasBookedSeat) {
   if (!trip) return trip;
-  if (trip.status === 'started' && hasBookedSeat) return trip;
+
+  const sanitized = {
+    ...trip,
+    qr_token: undefined
+  };
+
+  if (trip.status === 'started' && hasBookedSeat) return sanitized;
 
   return {
-    ...trip,
+    ...sanitized,
     driver_lat: null,
     driver_lng: null,
     driver_location_updated_at: null
   };
+}
+
+async function getPickupStatsByTripIds(tripIds) {
+  if (!tripIds.length) {
+    return new Map();
+  }
+
+  const placeholders = tripIds.map(() => '?').join(', ');
+  const statsRes = await db.execute(
+    `SELECT
+       t.id AS trip_id,
+       pp.id,
+       pp.name,
+       pp.lat,
+       pp.lng,
+       pp.eta_minutes,
+       COUNT(b.id) AS student_count
+     FROM trips t
+     CROSS JOIN pickup_points pp
+     LEFT JOIN bookings b
+       ON b.trip_id = t.id
+      AND b.pickup_point_id = pp.id
+      AND b.status IN ('booked', 'confirmed', 'attended')
+     WHERE t.id IN (${placeholders})
+     GROUP BY t.id, pp.id
+     ORDER BY t.id, pp.order_index`,
+    tripIds
+  );
+
+  const grouped = new Map();
+  for (const row of statsRes.rows) {
+    const tripId = Number(row.trip_id);
+    if (!grouped.has(tripId)) {
+      grouped.set(tripId, []);
+    }
+
+    grouped.get(tripId).push({
+      id: row.id,
+      name: row.name,
+      lat: row.lat,
+      lng: row.lng,
+      eta_minutes: row.eta_minutes,
+      student_count: Number(row.student_count || 0)
+    });
+  }
+
+  return grouped;
 }
 
 function getDepartureHour(trip) {
@@ -74,13 +128,20 @@ router.get('/', authenticateToken, async (req, res) => {
   const { direction, date } = req.query;
 
   let query = `
+    WITH booked_counts AS (
+      SELECT trip_id, COUNT(*) AS seats_booked
+      FROM bookings
+      WHERE status IN ('booked', 'confirmed', 'attended')
+      GROUP BY trip_id
+    )
     SELECT 
       t.*,
       ts.hour,
       ts.label as time_label,
-      (SELECT COUNT(*) FROM bookings WHERE trip_id = t.id AND status IN ('booked', 'confirmed', 'attended')) as seats_booked
+      COALESCE(bc.seats_booked, 0) as seats_booked
     FROM trips t
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
+    LEFT JOIN booked_counts bc ON bc.trip_id = t.id
     WHERE 1=1
   `;
   const params = [];
@@ -115,23 +176,14 @@ router.get('/', authenticateToken, async (req, res) => {
     return departureHour >= 15;
   });
 
-  // Enrich with pickup point stats
-  const enriched = await Promise.all(trips.map(async trip => {
-    const pickupStatsRes = await db.execute(`
-      SELECT 
-        pp.id, pp.name, pp.lat, pp.lng, pp.eta_minutes,
-        COUNT(b.id) as student_count
-      FROM pickup_points pp
-      LEFT JOIN bookings b ON b.pickup_point_id = pp.id AND b.trip_id = ? AND b.status IN ('booked', 'confirmed', 'attended')
-      GROUP BY pp.id
-      ORDER BY pp.order_index
-    `, [trip.id]);
+  const tripIds = trips.map((trip) => Number(trip.id));
+  const pickupStatsByTrip = await getPickupStatsByTripIds(tripIds);
 
-    return {
-      ...trip,
-      seats_available: trip.seats_total - trip.seats_booked,
-      pickup_stats: pickupStatsRes.rows
-    };
+  // Enrich with pickup point stats (single batched query).
+  const enriched = trips.map((trip) => ({
+    ...trip,
+    seats_available: trip.seats_total - trip.seats_booked,
+    pickup_stats: pickupStatsByTrip.get(Number(trip.id)) || []
   }));
 
   if (req.user?.role === 'student') {
@@ -145,13 +197,20 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get single trip with details
 router.get('/:id', authenticateToken, async (req, res) => {
   const tripRes = await db.execute(`
+    WITH booked_counts AS (
+      SELECT trip_id, COUNT(*) AS seats_booked
+      FROM bookings
+      WHERE status IN ('booked', 'confirmed', 'attended')
+      GROUP BY trip_id
+    )
     SELECT 
       t.*,
       ts.hour,
       ts.label as time_label,
-      (SELECT COUNT(*) FROM bookings WHERE trip_id = t.id AND status IN ('booked', 'confirmed', 'attended')) as seats_booked
+      COALESCE(bc.seats_booked, 0) as seats_booked
     FROM trips t
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
+    LEFT JOIN booked_counts bc ON bc.trip_id = t.id
     WHERE t.id = ?
   `, [req.params.id]);
   const trip = tripRes.rows[0];
@@ -197,14 +256,14 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
 // Get pickup points
 router.get('/config/pickup-points', authenticateToken, async (req, res) => {
-  const pointsRes = await db.execute('SELECT * FROM pickup_points ORDER BY order_index');
-  res.json(pointsRes.rows);
+  const points = await getCachedPickupPoints();
+  res.json(points);
 });
 
 // Get time slots
 router.get('/config/time-slots', authenticateToken, async (req, res) => {
-  const slotsRes = await db.execute('SELECT * FROM time_slots WHERE is_active = 1 ORDER BY hour');
-  res.json(slotsRes.rows);
+  const slots = await getCachedTimeSlots({ activeOnly: true });
+  res.json(slots);
 });
 
 export default router;

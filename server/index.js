@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -20,7 +21,9 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+app.disable('x-powered-by');
 app.use(cors());
+app.use(compression({ threshold: 1024 }));
 app.use(express.json());
 
 // API Routes
@@ -43,7 +46,6 @@ app.get('/api/health', async (req, res) => {
 
 // QR code endpoint
 app.get('/api/qr/:tripId', authenticateToken, requireDriver, async (req, res) => {
-  const { default: db } = await import('./db.js');
   const result = await db.execute('SELECT qr_token FROM trips WHERE id = ? AND status = \'started\'', [req.params.tripId]);
   const trip = result.rows[0];
   
