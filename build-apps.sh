@@ -29,8 +29,9 @@ echo "✓ Sync complete"
 echo ""
 
 # Step 3: Build Android
-echo "📱 Step 3: Building Android APK..."
-npx cap build android 2>/dev/null || {
+echo "📱 Step 3: Building Android debug APK..."
+cd "$PROJECT_ROOT/android"
+./gradlew assembleDebug 2>/dev/null || {
   echo "✗ Android build failed"
   exit 1
 }
