@@ -181,6 +181,19 @@ export default function StudentDashboard() {
     [myBookings]
   );
 
+  const visibleBookings = useMemo(() => {
+    const nonCompletedBookings = myBookings.filter(
+      (booking) => booking.status !== 'cancelled' && booking.trip_status !== 'completed'
+    );
+    const latestCompletedBooking = myBookings.find(
+      (booking) => booking.status !== 'cancelled' && booking.trip_status === 'completed'
+    );
+
+    return latestCompletedBooking
+      ? [...nonCompletedBookings, latestCompletedBooking]
+      : nonCompletedBookings;
+  }, [myBookings]);
+
   const {
     regularActiveTrips,
     customActiveTrips,
@@ -656,14 +669,14 @@ export default function StudentDashboard() {
           <div className="glass-panel">
             <h2><Users size={20} /> My Bookings</h2>
             
-                      {myBookings.length === 0 ? (
+                      {visibleBookings.length === 0 ? (
               <div className="empty-state">
                 <Calendar size={48} />
                 <p>No bookings yet. Book a ride!</p>
               </div>
             ) : (
               <div className="trip-list stagger-children">
-                {myBookings.filter(b => b.status !== 'cancelled').map(booking => (
+                {visibleBookings.map(booking => (
                   <div key={booking.id} className="card animate-in">
                     <div className="card-header">
                       <div>
