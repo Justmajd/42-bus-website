@@ -197,11 +197,12 @@ export default function StudentDashboard() {
 
   const mapTrip =
     bookedMapTrips.find((trip) => trip.status === 'started') ||
-    bookedMapTrips.find((trip) => trip.pickup_stats && trip.pickup_stats.length > 0) ||
-    bookedMapTrips.find((trip) => Number.isFinite(Number(trip.driver_lat)) && Number.isFinite(Number(trip.driver_lng))) ||
+    bookedMapTrips[0] ||
+    mapTripCandidates.find((trip) => trip.status === 'started') ||
+    mapTripCandidates[0] ||
     null;
 
-  const mapDriverLocation = mapTrip && mapTrip.status === 'started' && Number.isFinite(Number(mapTrip.driver_lat)) && Number.isFinite(Number(mapTrip.driver_lng))
+  const mapDriverLocation = mapTrip && bookedTripIds.has(Number(mapTrip.id)) && mapTrip.status === 'started' && Number.isFinite(Number(mapTrip.driver_lat)) && Number.isFinite(Number(mapTrip.driver_lng))
     ? { lat: Number(mapTrip.driver_lat), lng: Number(mapTrip.driver_lng) }
     : null;
 
@@ -612,18 +613,6 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          {/* Map */}
-          {mapTrip && (
-            <div className="glass-panel">
-              <h2><MapPin size={20} /> {mapDriverLocation ? 'Live Trip Tracking' : 'Pickup Points'}</h2>
-              {mapTrip.status === 'started' && mapDriverLocation && (
-                <div className="mb-3" style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 600 }}>
-                  Live driver location is being shared now.
-                </div>
-              )}
-              <MapView pickupStats={mapTrip.pickup_stats || []} driverLocation={mapDriverLocation} />
-            </div>
-          )}
         </div>
 
         {/* My Bookings */}
@@ -688,6 +677,19 @@ export default function StudentDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Map */}
+      {mapTrip && (
+        <div className="glass-panel mt-4">
+          <h2><MapPin size={20} /> {mapDriverLocation ? 'Live Trip Tracking' : 'Pickup Points'}</h2>
+          {mapTrip.status === 'started' && mapDriverLocation && (
+            <div className="mb-3" style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 600 }}>
+              Live driver location is being shared now.
+            </div>
+          )}
+          <MapView pickupStats={mapTrip.pickup_stats || []} driverLocation={mapDriverLocation} />
+        </div>
+      )}
     </div>
   );
 }

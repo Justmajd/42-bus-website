@@ -4,6 +4,48 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
+async function getBookedTripIdsForStudent(userId, tripIds) {
+  if (!tripIds.length) return new Set();
+
+  const placeholders = tripIds.map(() => '?').join(', ');
+  const bookingsRes = await db.execute(
+    `SELECT DISTINCT trip_id
+     FROM bookings
+     WHERE user_id = ?
+       AND trip_id IN (${placeholders})
+       AND status IN ('booked', 'confirmed', 'attended')`,
+    [userId, ...tripIds]
+  );
+
+  return new Set(bookingsRes.rows.map((row) => Number(row.trip_id)));
+}
+
+async function hasBookedTripForStudent(userId, tripId) {
+  const bookingsRes = await db.execute(
+    `SELECT 1
+     FROM bookings
+     WHERE user_id = ?
+       AND trip_id = ?
+       AND status IN ('booked', 'confirmed', 'attended')
+     LIMIT 1`,
+    [userId, tripId]
+  );
+
+  return Boolean(bookingsRes.rows[0]);
+}
+
+function sanitizeDriverLocationForStudent(trip, hasBookedSeat) {
+  if (!trip) return trip;
+  if (trip.status === 'started' && hasBookedSeat) return trip;
+
+  return {
+    ...trip,
+    driver_lat: null,
+    driver_lng: null,
+    driver_location_updated_at: null
+  };
+}
+
 function getDepartureHour(trip) {
   if (Number.isFinite(Number(trip?.hour))) {
     return Number(trip.hour);
@@ -92,6 +134,11 @@ router.get('/', authenticateToken, async (req, res) => {
     };
   }));
 
+  if (req.user?.role === 'student') {
+    const bookedTripIds = await getBookedTripIdsForStudent(req.user.id, enriched.map((trip) => Number(trip.id)));
+    return res.json(enriched.map((trip) => sanitizeDriverLocationForStudent(trip, bookedTripIds.has(Number(trip.id)))));
+  }
+
   res.json(enriched);
 });
 
@@ -136,9 +183,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
     ORDER BY pp.order_index
   `, [req.params.id]);
 
+  const visibleTrip = req.user?.role === 'student'
+    ? sanitizeDriverLocationForStudent(trip, await hasBookedTripForStudent(req.user.id, req.params.id))
+    : trip;
+
   res.json({
-    ...trip,
-    seats_available: trip.seats_total - trip.seats_booked,
+    ...visibleTrip,
+    seats_available: visibleTrip.seats_total - visibleTrip.seats_booked,
     bookings: bookingsRes.rows,
     pickup_stats: pickupStatsRes.rows
   });
