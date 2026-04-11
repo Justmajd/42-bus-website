@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-Active-success.svg?style=for-the-badge)
 
-**A Modern Cross-Platform Bus Booking & Management System for 42 Amman Campus**
+**A Modern Cross-Platform Bus Booking & Management System for 42 Irbid Campus**
 
 [Live Demo](https://42bus.up.railway.app) • [Features](#-features) • [Tech Stack](#-technologies) • [Installation](#-installation)
 
@@ -17,7 +17,7 @@
 
 ## 📱 Overview
 
-**42 Bus** is a comprehensive, full-stack bus booking and management application designed specifically for the 42 Amman campus community. Built with modern technologies and optimized for real-world deployment, this app streamlines the entire bus transportation experience for students, drivers, and administrators.
+**42 Bus** is a comprehensive, full-stack bus booking and management application designed specifically for the 42 Irbid campus community. Built with modern technologies and optimized for real-world deployment, this app streamlines the entire bus transportation experience for students, drivers, and administrators.
 
 The application is available on **Web**, **Android**, and **iOS**, providing seamless access across all devices using a single codebase powered by Capacitor.
 
