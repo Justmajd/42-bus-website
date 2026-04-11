@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -18,6 +18,54 @@ const DriverTripDetail = lazy(() => import('./pages/DriverTripDetail'));
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
+
+    const targets = Array.from(document.querySelectorAll([
+      '.glass-panel',
+      '.card',
+      '.trip-card',
+      '.auth-card',
+      '.alert',
+      '.scan-flash-card',
+      '.pickup-card',
+      '.stat-card',
+      '.admin-stat-card',
+      '.notification-panel',
+      '.qr-container',
+      '.profile-header',
+      '.empty-state',
+      '.toast'
+    ].join(',')));
+
+    if (targets.length === 0) return;
+
+    document.documentElement.classList.add('motion-ready');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, {
+      root: null,
+      threshold: 0.12,
+      rootMargin: '0px 0px -8% 0px',
+    });
+
+    targets.forEach((target, index) => {
+      target.classList.add('motion-reveal');
+      target.style.setProperty('--reveal-delay', `${Math.min(index * 40, 240)}ms`);
+      observer.observe(target);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   if (loading) {
     return (

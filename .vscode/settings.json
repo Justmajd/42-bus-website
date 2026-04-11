@@ -4,5 +4,6 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "java.configuration.updateBuildConfiguration": "disabled"
 }
