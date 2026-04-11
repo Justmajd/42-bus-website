@@ -513,14 +513,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 For questions, support, or feedback:
 - Create an issue on GitHub
-- Email: support@42bus.app
 - Visit: [42bus.up.railway.app](https://42bus.up.railway.app)
 
 ---
 
 <div align="center">
 
-### Made for 42 Amman Community with ❤️
+### Made for 42 Irbid Community with ❤️
 
 **Built during Hackathon | Powered by Modern Technologies**
 
