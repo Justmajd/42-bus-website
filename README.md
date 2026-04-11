@@ -9,7 +9,7 @@
 
 **A Modern Cross-Platform Bus Booking & Management System for 42 Amman Campus**
 
-[Live Demo](42bus.up.railway.app) • [Features](#-features) • [Tech Stack](#-technologies) • [Installation](#-installation)
+[Live Demo](https://42bus.up.railway.app) • [Features](#-features) • [Tech Stack](#-technologies) • [Installation](#-installation)
 
 </div>
 
@@ -514,7 +514,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 For questions, support, or feedback:
 - Create an issue on GitHub
 - Email: support@42bus.app
-- Visit: [42bus.up.railway.app](42bus.up.railway.app)
+- Visit: [42bus.up.railway.app](https://42bus.up.railway.app)
 
 ---
 
