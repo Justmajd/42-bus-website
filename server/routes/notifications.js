@@ -3,7 +3,13 @@ import jwt from 'jsonwebtoken';
 import db from '../db.js';
 import { authenticateToken, JWT_SECRET } from '../middleware/auth.js';
 import { addClient, removeClient } from '../services/notifier.js';
-import { getVapidPublicKey, removePushSubscription, savePushSubscription } from '../services/push.js';
+import {
+  getVapidPublicKey,
+  removeMobilePushToken,
+  removePushSubscription,
+  saveMobilePushToken,
+  savePushSubscription
+} from '../services/push.js';
 
 const router = Router();
 
@@ -66,6 +72,26 @@ router.delete('/push/subscribe', authenticateToken, async (req, res) => {
     res.json({ message: 'Push subscription removed.' });
   } catch (error) {
     res.status(400).json({ error: error.message || 'Failed to remove subscription.' });
+  }
+});
+
+router.post('/mobile/register', authenticateToken, async (req, res) => {
+  try {
+    const token = req.body?.token;
+    const platform = req.body?.platform || 'unknown';
+    const result = await saveMobilePushToken(req.user.id, token, platform);
+    res.status(201).json({ message: 'Mobile push token saved.', ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Invalid mobile push token.' });
+  }
+});
+
+router.delete('/mobile/register', authenticateToken, async (req, res) => {
+  try {
+    await removeMobilePushToken(req.user.id, req.body?.token);
+    res.json({ message: 'Mobile push token removed.' });
+  } catch (error) {
+    res.status(400).json({ error: error.message || 'Failed to remove mobile push token.' });
   }
 });
 

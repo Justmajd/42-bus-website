@@ -11,6 +11,7 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\"",
     "build": "vite build",
     "cap:sync": "npm run build && npx cap sync",
+    "cap:sync:railway": "npm run build && npx cap sync android ios",
     "cap:add:android": "npx cap add android",
     "cap:add:ios": "npx cap add ios",
     "cap:open:android": "npx cap open android",
@@ -23,12 +24,15 @@
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "^8.3.0",
+    "@capacitor/local-notifications": "^8.0.2",
+    "@capacitor/push-notifications": "^8.0.3",
     "@libsql/client": "0.6.0",
     "bcryptjs": "^3.0.2",
     "concurrently": "^9.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
+    "firebase-admin": "^13.8.0",
     "html5-qrcode": "^2.3.8",
     "jsonwebtoken": "^9.0.2",
     "leaflet": "^1.9.4",
@@ -43,6 +47,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^6.0.2",
     "vite": "^6.1.0"

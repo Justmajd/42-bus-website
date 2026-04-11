@@ -375,12 +375,23 @@ export async function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS mobile_push_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      platform TEXT DEFAULT 'unknown',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(date);
     CREATE INDEX IF NOT EXISTS idx_trips_direction ON trips(direction);
     CREATE INDEX IF NOT EXISTS idx_trips_status ON trips(status);
     CREATE INDEX IF NOT EXISTS idx_bookings_trip ON bookings(trip_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_mobile_push_tokens_user ON mobile_push_tokens(user_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_trip_uniqueness ON trips(direction, date, time_slot_id);
   `);
 }

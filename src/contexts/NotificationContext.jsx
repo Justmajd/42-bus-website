@@ -1,8 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { useAuth } from './AuthContext';
 import { API_BASE, getSSEUrl } from '../api';
 
 const NotificationContext = createContext(null);
+const isNativePlatform = Capacitor.getPlatform() !== 'web';
+const nativePushEnabled = String(import.meta.env.VITE_ENABLE_NATIVE_PUSH || '').toLowerCase() === 'true';
 
 function safeParseSSEData(rawData) {
   if (typeof rawData !== 'string') return null;
@@ -23,6 +28,7 @@ export function NotificationProvider({ children }) {
   const [seatUpdates, setSeatUpdates] = useState({});
   const [tripUpdates, setTripUpdates] = useState(null);
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => {
+    if (isNativePlatform) return 'prompt';
     if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
     return window.Notification.permission;
   });
@@ -31,6 +37,17 @@ export function NotificationProvider({ children }) {
   const eventSourceRef = useRef(null);
   const pushSubscriptionUserRef = useRef(null);
   const hiddenNotificationIdsRef = useRef([]);
+
+  const upsertNotification = useCallback((incoming) => {
+    if (!incoming) return;
+
+    setNotifications((prev) => {
+      const exists = prev.some((n) => String(n.id) === String(incoming.id));
+      if (exists) return prev;
+      setUnreadCount((count) => count + 1);
+      return [incoming, ...prev];
+    });
+  }, []);
 
   const preferenceKey = user ? `browser_notifications_enabled_${user.id}` : 'browser_notifications_enabled';
   const hiddenKey = user ? `hidden_notifications_${user.id}` : 'hidden_notifications';
@@ -58,6 +75,7 @@ export function NotificationProvider({ children }) {
   }
 
   const syncPushSubscription = useCallback(async () => {
+    if (isNativePlatform) return false;
     if (typeof window === 'undefined' || !token || !user) return false;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
     if (!('Notification' in window) || window.Notification.permission !== 'granted') return false;
@@ -91,9 +109,59 @@ export function NotificationProvider({ children }) {
     return true;
   }, [token, user]);
 
-  const showBrowserNotification = useCallback((data) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
+  const registerNativePush = useCallback(async () => {
+    if (!isNativePlatform || !token || !user) return false;
+    if (!nativePushEnabled) return false;
+
+    try {
+      let permission = await PushNotifications.checkPermissions();
+      if (permission.receive !== 'granted') {
+        permission = await PushNotifications.requestPermissions();
+      }
+
+      if (permission.receive !== 'granted') {
+        setBrowserNotificationPermission('denied');
+        return false;
+      }
+
+      setBrowserNotificationPermission('granted');
+      await PushNotifications.register();
+      return true;
+    } catch {
+      return false;
+    }
+  }, [token, user]);
+
+  const showBrowserNotification = useCallback(async (data) => {
     if (!browserNotificationsEnabled) return;
+
+    if (isNativePlatform) {
+      try {
+        const permission = await LocalNotifications.checkPermissions();
+        if (permission.display !== 'granted') return;
+
+        const title = data?.title || 'Bus Notification';
+        const body = data?.message || 'You have a new update.';
+        const numericId = Number(data?.id);
+        const id = Number.isFinite(numericId) && numericId > 0
+          ? Math.floor(numericId % 2147483647)
+          : Math.floor(Date.now() % 2147483647);
+
+        await LocalNotifications.schedule({
+          notifications: [{
+            id,
+            title,
+            body,
+            schedule: { at: new Date(Date.now() + 200) }
+          }]
+        });
+      } catch {
+        // Ignore native notification failures; in-app notifications still work.
+      }
+      return;
+    }
+
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
     if (window.Notification.permission !== 'granted') return;
 
     const title = data?.title || 'Bus Notification';
@@ -120,6 +188,26 @@ export function NotificationProvider({ children }) {
       window.localStorage.setItem(preferenceKey, 'false');
     } catch {
       // Ignore storage failures.
+    }
+
+    if (isNativePlatform) {
+      if (token) {
+        try {
+          await fetch(`${API_BASE}/api/notifications/mobile/register`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({})
+          });
+        } catch {
+          // Ignore native token remove failures.
+        }
+      }
+
+      pushSubscriptionUserRef.current = null;
+      return true;
     }
 
     if (!token || !('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -155,6 +243,32 @@ export function NotificationProvider({ children }) {
   }, [preferenceKey, token]);
 
   const requestBrowserNotifications = useCallback(async () => {
+    if (isNativePlatform) {
+      try {
+        const permission = await LocalNotifications.requestPermissions();
+        const normalized = permission.display || 'denied';
+        const granted = normalized === 'granted';
+
+        setBrowserNotificationPermission(normalized);
+        setBrowserNotificationsEnabled(granted);
+
+        try {
+          window.localStorage.setItem(preferenceKey, granted ? 'true' : 'false');
+        } catch {
+          // Ignore storage failures.
+        }
+
+        if (granted) {
+          await registerNativePush();
+        }
+
+        return normalized;
+      } catch {
+        setBrowserNotificationPermission('unsupported');
+        return 'unsupported';
+      }
+    }
+
     if (typeof window === 'undefined' || !('Notification' in window)) {
       setBrowserNotificationPermission('unsupported');
       return 'unsupported';
@@ -178,9 +292,27 @@ export function NotificationProvider({ children }) {
     }
 
     return permission;
-  }, [preferenceKey, syncPushSubscription]);
+  }, [preferenceKey, syncPushSubscription, registerNativePush]);
 
   const enableBrowserNotifications = useCallback(async () => {
+    if (isNativePlatform) {
+      const permission = await LocalNotifications.checkPermissions();
+      if (permission.display !== 'granted') {
+        return requestBrowserNotifications();
+      }
+
+      setBrowserNotificationPermission('granted');
+      setBrowserNotificationsEnabled(true);
+      try {
+        window.localStorage.setItem(preferenceKey, 'true');
+      } catch {
+        // Ignore storage failures.
+      }
+
+      await registerNativePush();
+      return 'granted';
+    }
+
     if (typeof window === 'undefined' || !('Notification' in window)) {
       setBrowserNotificationPermission('unsupported');
       return 'unsupported';
@@ -204,7 +336,7 @@ export function NotificationProvider({ children }) {
     }
 
     return 'granted';
-  }, [preferenceKey, requestBrowserNotifications, syncPushSubscription]);
+  }, [preferenceKey, requestBrowserNotifications, syncPushSubscription, registerNativePush]);
 
   // Connect SSE
   useEffect(() => {
@@ -225,8 +357,7 @@ export function NotificationProvider({ children }) {
       const data = safeParseSSEData(event.data);
       if (!data) return;
       if (hiddenNotificationIdsRef.current.includes(data.id)) return;
-      setNotifications(prev => [data, ...prev]);
-      setUnreadCount(prev => prev + 1);
+      upsertNotification(data);
       showBrowserNotification(data);
     });
 
@@ -256,12 +387,89 @@ export function NotificationProvider({ children }) {
       es.close();
       eventSourceRef.current = null;
     };
-  }, [token, user, showBrowserNotification]);
+  }, [token, user, showBrowserNotification, upsertNotification]);
 
   useEffect(() => {
+    if (isNativePlatform) {
+      LocalNotifications.checkPermissions()
+        .then((result) => {
+          setBrowserNotificationPermission(result.display || 'prompt');
+        })
+        .catch(() => {
+          setBrowserNotificationPermission('unsupported');
+        });
+      return;
+    }
+
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     setBrowserNotificationPermission(window.Notification.permission);
   }, []);
+
+  // Register native push token + listeners (Android/iOS) for closed/background notifications.
+  useEffect(() => {
+    if (!isNativePlatform || !token || !user) return;
+    if (!nativePushEnabled) return;
+
+    let active = true;
+    let registrationHandle;
+    let registrationErrorHandle;
+    let receivedHandle;
+
+    const setup = async () => {
+      registrationHandle = await PushNotifications.addListener('registration', async (tokenValue) => {
+        if (!active) return;
+
+        try {
+          await fetch(`${API_BASE}/api/notifications/mobile/register`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              token: tokenValue.value,
+              platform: Capacitor.getPlatform()
+            })
+          });
+          pushSubscriptionUserRef.current = user.id;
+        } catch {
+          // Ignore token register failures; app still works with SSE.
+        }
+      });
+
+      registrationErrorHandle = await PushNotifications.addListener('registrationError', (error) => {
+        console.error('[PUSH REGISTRATION ERROR]', error);
+      });
+
+      receivedHandle = await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        const data = notification?.data || {};
+        const idRaw = data.id || Date.now();
+        const incoming = {
+          id: Number(idRaw) || Number(Date.now()),
+          user_id: user.id,
+          type: data.type || 'push',
+          title: data.title || notification.title || 'Bus Notification',
+          message: data.message || notification.body || 'You have a new update.',
+          is_read: 0,
+          created_at: new Date().toISOString()
+        };
+
+        upsertNotification(incoming);
+        showBrowserNotification(incoming);
+      });
+
+      await registerNativePush();
+    };
+
+    setup();
+
+    return () => {
+      active = false;
+      registrationHandle?.remove?.();
+      registrationErrorHandle?.remove?.();
+      receivedHandle?.remove?.();
+    };
+  }, [token, user, registerNativePush, showBrowserNotification, upsertNotification]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -300,6 +508,7 @@ export function NotificationProvider({ children }) {
   }, [hiddenNotificationIds]);
 
   useEffect(() => {
+    if (isNativePlatform) return;
     if (!token || !user) return;
     if (browserNotificationPermission !== 'granted') return;
     if (!browserNotificationsEnabled) return;

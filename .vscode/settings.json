@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^export DEVELOPER_DIR=/Applications/Xcode\\.app/Contents/Developer && xcodebuild -downloadPlatform iOS$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

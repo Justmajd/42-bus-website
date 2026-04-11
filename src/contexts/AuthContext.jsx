@@ -14,7 +14,7 @@ async function parseApiResponse(res) {
   const raw = await res.text();
   let details = raw.trim();
   if (details.startsWith('<')) {
-    details = 'The server returned HTML instead of JSON. Check API URL/proxy configuration.';
+    details = 'The server returned HTML instead of JSON. Check API URL/proxy configuration. If running on mobile, set VITE_API_URL to your backend origin and rebuild/sync.';
   } else if (!details) {
     details = 'Empty response from server.';
   }

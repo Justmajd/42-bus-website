@@ -2,6 +2,15 @@
 node_modules/
 dist/
 
+# Capacitor-generated assets and build output
+resources/*.png
+ios/App/build/
+ios/App/App/Assets.xcassets/Splash.imageset/*.png
+ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png
+
+# IDE
+.idea/
+
 # Database
 server/*.db
 server/*.db-wal

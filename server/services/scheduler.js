@@ -12,6 +12,7 @@ export function startScheduler() {
     try {
       const now = getAmmanDate();
       await checkTripConfirmations(now);
+      await removeUnconfirmedTo42Trips(now);
       await checkFrom42Notifications(now);
       await recalculateDepartureTimes();
       await checkTripExpiry(now);
@@ -145,6 +146,33 @@ async function checkTripConfirmations(now) {
   }
 }
 
+// Remove Point → 42 trips that are still pending within the next 2 hours.
+async function removeUnconfirmedTo42Trips(now) {
+  const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  const nowStr = getAmmanDateTimeString(now);
+  const twoHoursStr = getAmmanDateTimeString(twoHoursLater);
+
+  const pendingTripsRes = await db.execute(
+    `
+      SELECT id
+      FROM trips
+      WHERE direction = 'to_42'
+      AND status = 'pending'
+      AND calculated_departure IS NOT NULL
+      AND calculated_departure >= ?
+      AND calculated_departure <= ?
+    `,
+    [nowStr, twoHoursStr]
+  );
+
+  for (const trip of pendingTripsRes.rows) {
+    await db.execute('DELETE FROM bookings WHERE trip_id = ?', [trip.id]);
+    await db.execute('DELETE FROM trips WHERE id = ?', [trip.id]);
+    broadcast('trip_update', { trip_id: trip.id, status: 'deleted' });
+    console.log(`🗑️ Point → 42 trip ${trip.id} was not confirmed within 2 hours. Removed.`);
+  }
+}
+
 // Notify all students 1 hour before from_42 departure
 async function checkFrom42Notifications(now) {
   const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
@@ -157,7 +185,7 @@ async function checkFrom42Notifications(now) {
     FROM trips t 
     LEFT JOIN time_slots ts ON t.time_slot_id = ts.id
     WHERE t.direction = 'from_42' 
-    AND t.status IN ('pending', 'confirmed')
+    AND t.status = 'confirmed'
     AND t.calculated_departure IS NOT NULL 
     AND t.calculated_departure >= ?
     AND t.calculated_departure <= ?

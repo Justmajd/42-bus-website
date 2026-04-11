@@ -28,6 +28,8 @@
 	<string>LaunchScreen</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>42 uses your location while a trip is started to share the driver's live position with students.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>42 uses your camera to scan QR codes for trip attendance confirmation.</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
