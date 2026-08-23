@@ -3,20 +3,20 @@ import db from './db.js';
 import bcrypt from 'bcryptjs';
 import { getAmmanDateString, getAmmanDate } from './utils/timezone.js';
 
-console.log('🌱 Initialization checking...');
+console.log('Checking database initialization...');
 async function testConnection() {
   let retries = 5;
   while (retries > 0) {
     try {
-      console.log('📡 Testing connection to Turso...');
+      console.log('Testing database connection...');
       await db.execute('SELECT 1');
-      console.log('✅ Connection test successful.');
+      console.log('Database connection successful.');
       return;
     } catch (e) {
-      console.error(`❌ Connection test failed (${retries} retries left):`, e.message);
+      console.error(`Connection test failed (${retries} retries left):`, e.message);
       retries -= 1;
       if (retries === 0) {
-        console.error('❌ FATAL: Could not connect to Turso database after multiple attempts. Aborting.');
+        console.error('Could not connect to the database after multiple attempts. Aborting.');
         process.exit(1);
       }
       await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
@@ -26,7 +26,7 @@ async function testConnection() {
 await testConnection();
 
 try {
-  console.log('🧹 Pruning previous duplicates to prepare for strict mode...');
+  console.log('Pruning duplicate trips before initialization...');
   // Only attempt if trips table actually exists yet
   try {
     await db.execute(`
@@ -39,13 +39,13 @@ try {
     // Ignore if table doesn't exist on fresh boots
   }
 
-  console.log('🏗️ Building tables with strict unique indexes...');
+  console.log('Initializing tables and indexes...');
   await initializeDatabase();
 } catch (e) {
-  console.error('❌ FATAL ERROR DURING DB INITIALIZATION:', e.message);
+  console.error('Database initialization failed:', e.message);
   process.exit(1);
 }
-console.log('🌱 Seeding database...\n');
+console.log('Seeding database...\n');
 
 // Seed actual pickup points (Irbid coordinates matching reality)
 const pickupPoints = [
@@ -63,15 +63,15 @@ if (existingPointsRes.rows[0].count === 0) {
       VALUES (?, ?, ?, ?, ?)
     `, [point.name, point.lat, point.lng, point.order_index, point.eta_minutes]);
   }
-  console.log('✅ Pickup points seeded');
+  console.log('Pickup points seeded.');
 } else {
-  console.log('🔄  Updating existing pickup points with new Arabic locations...');
+  console.log('Updating existing pickup points...');
   for (const point of pickupPoints) {
     await db.execute(`
       UPDATE pickup_points SET name = ?, lat = ?, lng = ? WHERE order_index = ?
     `, [point.name, point.lat, point.lng, point.order_index]);
   }
-  console.log('✅ Pickup points fully synced to proper coordinates');
+  console.log('Pickup points updated.');
 }
 
 // Seed time slots (9 AM to 3 PM)
@@ -92,9 +92,9 @@ if (existingSlotsRes.rows[0].count === 0) {
       VALUES (?, ?, 1)
     `, [slot.hour, slot.label]);
   }
-  console.log('✅ Time slots seeded');
+  console.log('Time slots seeded.');
 } else {
-  console.log('⏭️  Time slots already exist');
+  console.log('Time slots already exist.');
 }
 
 // Update old admin to driver if it existed
@@ -109,9 +109,9 @@ if (!existingDriverRes.rows[0]) {
     INSERT INTO users (email, password_hash, name, role) 
     VALUES (?, ?, ?, 'driver')
   `, [driverEmail, hash, 'Bus Driver']);
-  console.log('✅ Driver account seeded');
+  console.log('Driver account seeded.');
 } else {
-  console.log('⏭️  Driver account already exists');
+  console.log('Driver account already exists.');
 }
 
 // Seed super admin account
@@ -123,9 +123,9 @@ if (!existingAdminRes.rows[0]) {
     INSERT INTO users (email, password_hash, name, role) 
     VALUES (?, ?, ?, 'admin')
   `, [adminEmail, hash, 'Super Admin']);
-  console.log('✅ Admin account seeded (admin@learner.42.tech / admin123)');
+  console.log('Admin account seeded (admin@learner.42.tech / admin123).');
 } else {
-  console.log('⏭️  Admin account already exists');
+  console.log('Admin account already exists.');
 }
 
 // Seed initial trips for today and tomorrow using Amman logic
@@ -167,10 +167,10 @@ if (existingTripsRes.rows[0].count === 0) {
     ]);
   }
 
-  console.log('✅ Initial trips seeded');
+  console.log('Initial trips seeded.');
 } else {
-  console.log('⏭️  Trips already exist');
+  console.log('Trips already exist.');
 }
 
-console.log('\n🎉 Seed complete!');
+console.log('\nSeed complete.');
 process.exit(0);

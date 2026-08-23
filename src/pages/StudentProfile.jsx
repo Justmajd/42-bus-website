@@ -120,7 +120,7 @@ export default function StudentProfile() {
             </div>
             {!user.profile_picture && (
               <div style={{ color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '6px', fontWeight: 600 }}>
-                ⚠️ Face picture required for booking
+                Face picture required before booking
               </div>
             )}
           </div>

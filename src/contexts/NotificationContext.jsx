@@ -350,7 +350,7 @@ export function NotificationProvider({ children }) {
     // and use SSE for real-time updates
     
     es.onopen = () => {
-      console.log('📡 SSE connected');
+      console.log('SSE connected');
     };
 
     es.addEventListener('notification', (event) => {
@@ -380,7 +380,7 @@ export function NotificationProvider({ children }) {
     });
 
     es.onerror = () => {
-      console.log('📡 SSE error, reconnecting...');
+      console.log('SSE error, reconnecting...');
     };
 
     return () => {

@@ -43,7 +43,7 @@ async function promoteNextWaitlistedBooking(trip) {
   await createNotification(
     waitlistedBooking.user_id,
     'waitlist_promoted',
-    'You got a seat! 🎉',
+    'A seat is available',
     `Good news: your ${dirLabel} trip (${timeLabel}) on ${fullTrip.date} moved from the waitlist to a booked seat.`
   );
 
@@ -199,7 +199,7 @@ router.post('/', authenticateToken, async (req, res) => {
         await createNotification(
           bookingRow.user_id,
           'trip_confirmed',
-          'Trip Confirmed! 🚌',
+          'Trip confirmed',
           `Your ${dirLabel} trip (${timeLabel}) on ${trip.date} is confirmed with 8 or more students and will depart as scheduled.`
         );
       }
@@ -370,7 +370,7 @@ router.post('/attend', authenticateToken, async (req, res) => {
     student_picture: student.profile_picture || null
   });
 
-  res.json({ message: 'Attendance confirmed! ✅', booking_id: booking.id });
+  res.json({ message: 'Attendance confirmed.', booking_id: booking.id });
 });
 
 export default router;

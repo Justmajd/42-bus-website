@@ -40,7 +40,7 @@ export default function StudentDashboard() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-    setSuccess('Attendance confirmed successfully! ✅');
+    setSuccess('Attendance confirmed.');
     setTimeout(() => setSuccess(''), 4000);
     fetchData();
     return data;
@@ -125,7 +125,7 @@ export default function StudentDashboard() {
       }
       setSuccess(data.status === 'waitlisted'
         ? 'You were added to the waitlist. We will notify you if a seat opens.'
-        : 'Ride booked successfully! 🎉');
+        : 'Ride booked successfully.');
       setTimeout(() => setSuccess(''), 3000);
       fetchData();
     } catch (err) {
@@ -705,7 +705,7 @@ export default function StudentDashboard() {
                       <div className="flex items-center gap-2" style={{ fontSize: '0.8rem' }}>
                         <span className={`status-dot ${booking.status === 'waitlisted' ? 'waitlisted' : booking.trip_status}`}></span>
                         {booking.status === 'waitlisted' ? 'Waitlisted' :
-                         booking.status === 'attended' ? 'Attended ✅' : 
+                          booking.status === 'attended' ? 'Attended' :
                          booking.trip_status === 'confirmed' ? 'Confirmed' : 
                          booking.trip_status === 'started' ? 'In Progress' : 'Pending'}
                       </div>

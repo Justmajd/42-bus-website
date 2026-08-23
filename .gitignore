@@ -1,43 +1,49 @@
-# Node
+# Dependencies and web output
 node_modules/
 dist/
+coverage/
+.cache/
+tmp/
+temp/
 
-# Capacitor-generated assets and build output
-resources/*.png
-ios/App/build/
-ios/App/App/Assets.xcassets/Splash.imageset/*.png
-ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png
-
-# Android build output
-android/app/build/
-android/.gradle/
-android/local.properties
-android/build/
-
-# iOS build artifacts
-ios/App.xcarchive/
-ios/App.xcarchive
-ios/**/*.xcuserdatad/
-DerivedData/
-
-# Build exports
+# Native build output
 app_export/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+ios/**/build/
+ios/**/*.xcarchive/
+DerivedData/
+resources/*.png
 *.apk
 *.ipa
 
-# IDE
+# Generated native assets
+ios/App/App/Assets.xcassets/Splash.imageset/*.png
+ios/App/App/Assets.xcassets/AppIcon.appiconset/*.png
+
+# Local databases and runtime files
+*.db
+*.db-shm
+*.db-wal
+server/data/*
+!server/data/.gitkeep
+
+# Environment and local tooling
+.env
+.env.*
+!.env.example
 .idea/
 .vscode/
-
-# Database
-server/*.db
-server/*.db-wal
-server/*.db-shm
-
-# Environment
-.env
-.env.local
-
-# Misc
 .DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.bak
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

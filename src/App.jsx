@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -19,54 +19,6 @@ const DriverTripDetail = lazy(() => import('./pages/DriverTripDetail'));
 function AppRoutes() {
   const { user, loading } = useAuth();
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
-
-    const targets = Array.from(document.querySelectorAll([
-      '.glass-panel',
-      '.card',
-      '.trip-card',
-      '.auth-card',
-      '.alert',
-      '.scan-flash-card',
-      '.pickup-card',
-      '.stat-card',
-      '.admin-stat-card',
-      '.notification-panel',
-      '.qr-container',
-      '.profile-header',
-      '.empty-state',
-      '.toast'
-    ].join(',')));
-
-    if (targets.length === 0) return;
-
-    document.documentElement.classList.add('motion-ready');
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('is-visible');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, {
-      root: null,
-      threshold: 0.12,
-      rootMargin: '0px 0px -8% 0px',
-    });
-
-    targets.forEach((target, index) => {
-      target.classList.add('motion-reveal');
-      target.style.setProperty('--reveal-delay', `${Math.min(index * 40, 240)}ms`);
-      observer.observe(target);
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
   if (loading) {
     return (
       <div className="loading-spinner" style={{ minHeight: '100vh' }}>
@@ -80,11 +32,9 @@ function AppRoutes() {
       <Navbar />
       <Suspense fallback={<div className="loading-spinner" style={{ minHeight: '100vh' }}><div className="spinner"></div></div>}>
         <Routes>
-          {/* Public routes */}
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
 
-          {/* Dashboard index */}
           <Route path="/" element={
             <ProtectedRoute>
               {user?.role === 'admin' ? <Navigate to="/admin/stats" replace /> 
@@ -93,7 +43,6 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
 
-          {/* Admin routes */}
           <Route path="/admin/stats" element={
             <ProtectedRoute adminOnly>
               <AdminDashboard />
@@ -118,21 +67,18 @@ function AppRoutes() {
             </ProtectedRoute>
           } />
         
-          {/* Student routes */}
           <Route path="/profile" element={
             <ProtectedRoute>
               <StudentProfile />
             </ProtectedRoute>
           } />
 
-          {/* Driver routes */}
           <Route path="/driver/trips/:id" element={
             <ProtectedRoute driverOnly>
               <DriverTripDetail />
             </ProtectedRoute>
           } />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Suspense>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bus, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
@@ -30,10 +30,10 @@ export default function Login() {
     <div className="auth-container">
       <div className="auth-card animate-in">
         <div className="auth-logo">
-          <img src="/42-logo.png" alt="42 Logo" style={{ width: 64, height: 64, objectFit: 'contain' }} />
+          <img src="/42-logo.png" alt="42 Irbid logo" />
           Bus
         </div>
-        <p className="auth-subtitle">Sign in to book your shuttle ride</p>
+        <p className="auth-subtitle">Sign in to book a campus ride</p>
 
         {error && (
           <div className="alert alert-error">

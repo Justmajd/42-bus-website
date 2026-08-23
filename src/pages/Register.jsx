@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bus, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Register() {
@@ -49,10 +49,10 @@ export default function Register() {
     <div className="auth-container">
       <div className="auth-card animate-in">
         <div className="auth-logo">
-          <img src="/42-logo.png" alt="42 Logo" style={{ width: 64, height: 64, objectFit: 'contain' }} />
+          <img src="/42-logo.png" alt="42 Irbid logo" />
           Bus
         </div>
-        <p className="auth-subtitle">Create your account to start booking rides</p>
+        <p className="auth-subtitle">Create an account to book campus rides</p>
 
         {error && (
           <div className="alert alert-error">

@@ -86,8 +86,8 @@ import { initializeDatabase } from './db.js';
 
 initializeDatabase().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚌 42 Bus Booking API running at http://0.0.0.0:${PORT}`);
-    console.log(`📡 SSE stream at http://0.0.0.0:${PORT}/api/notifications/stream`);
+    console.log(`\n42 Bus API running at http://0.0.0.0:${PORT}`);
+    console.log(`SSE stream at http://0.0.0.0:${PORT}/api/notifications/stream`);
     startScheduler();
   });
 }).catch(err => {

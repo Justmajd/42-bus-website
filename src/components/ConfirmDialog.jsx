@@ -14,33 +14,23 @@ export default function ConfirmDialog({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-      }}
+      className="modal-backdrop"
       onClick={onCancel}
     >
       <div
-        className="glass-panel animate-in"
-        style={{ width: '100%', maxWidth: 420 }}
+        className="modal-card glass-panel animate-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="mb-3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <h3 className="modal-title mb-3">
           <AlertTriangle size={18} style={{ color: danger ? 'var(--accent-red)' : 'var(--accent-amber)' }} />
           {title}
         </h3>
 
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 16 }}>
+        <p className="modal-message">
           {message}
         </p>
 
-        <div className="flex gap-2" style={{ justifyContent: 'flex-end' }}>
+        <div className="modal-actions flex gap-2">
           <button className="btn btn-ghost" onClick={onCancel}>
             {cancelText}
           </button>

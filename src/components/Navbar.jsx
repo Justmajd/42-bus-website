@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Bus, LayoutDashboard, User, LogOut, Users, Route, Send } from 'lucide-react';
+import { LayoutDashboard, User, LogOut, Users, Route, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationBell from './NotificationBell';
 

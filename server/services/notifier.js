@@ -8,13 +8,13 @@ const clients = new Map();
 export function addClient(userId, res) {
   const clientId = uuidv4();
   clients.set(clientId, { userId, res });
-  console.log(`📡 SSE client connected: ${clientId} (user ${userId}). Total: ${clients.size}`);
+  console.log(`SSE client connected: ${clientId} (user ${userId}). Total: ${clients.size}`);
   return clientId;
 }
 
 export function removeClient(clientId) {
   clients.delete(clientId);
-  console.log(`📡 SSE client disconnected: ${clientId}. Total: ${clients.size}`);
+  console.log(`SSE client disconnected: ${clientId}. Total: ${clients.size}`);
 }
 
 // Broadcast to ALL connected clients

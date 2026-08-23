@@ -45,7 +45,7 @@ export async function generateNextDayTrip(oldTrip) {
       'INSERT INTO trips (direction, date, time_slot_id, calculated_departure, seats_total, status) VALUES (?, ?, ?, ?, 15, \'pending\')',
       [oldTrip.direction, nextDateStr, slot.id, nextDeparture]
     );
-    console.log(`♻️ Auto-generated next-day trip: ${oldTrip.direction} for ${nextDateStr}`);
+    console.log(`Auto-generated next-day trip: ${oldTrip.direction} for ${nextDateStr}`);
   }
 }
 
@@ -81,7 +81,7 @@ async function checkTripExpiry(now) {
     await db.execute('DELETE FROM bookings WHERE trip_id = ?', [trip.id]);
     await db.execute('DELETE FROM trips WHERE id = ?', [trip.id]);
     broadcast('trip_update', { trip_id: trip.id, status: 'deleted' });
-    console.log(`🗑️ Trip ${trip.id} expired without starting. Removed.`);
+    console.log(`Trip ${trip.id} expired without starting. Removed.`);
   }
 }
 
@@ -130,7 +130,7 @@ async function checkTripConfirmations(now) {
       await createNotification(
         b.user_id,
         'trip_confirmed',
-        'Trip Confirmed! 🚌',
+        'Trip confirmed',
         `Your ${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} is confirmed with 8 or more students and will depart as scheduled.`
       );
     }
@@ -139,13 +139,13 @@ async function checkTripConfirmations(now) {
       await createNotification(
         adminId,
         'trip_confirmed',
-        'Trip Confirmed 📋',
+        'Trip confirmed',
         `${dirLabel} trip (${trip.time_label || ''}) on ${trip.date} has been confirmed with ${trip.booked_count} students.`
       );
     }
 
     broadcast('trip_update', { trip_id: trip.id, status: 'confirmed' });
-    console.log(`✅ Trip ${trip.id} auto-confirmed`);
+    console.log(`Trip ${trip.id} auto-confirmed`);
   }
 }
 
@@ -172,7 +172,7 @@ async function removeUnconfirmedTo42Trips(now) {
     await db.execute('DELETE FROM bookings WHERE trip_id = ?', [trip.id]);
     await db.execute('DELETE FROM trips WHERE id = ?', [trip.id]);
     broadcast('trip_update', { trip_id: trip.id, status: 'deleted' });
-    console.log(`🗑️ Point → 42 trip ${trip.id} was not confirmed within 2 hours. Removed.`);
+    console.log(`Point → 42 trip ${trip.id} was not confirmed within 2 hours. Removed.`);
   }
 }
 
@@ -203,10 +203,10 @@ async function checkFrom42Notifications(now) {
     if (!alreadyNotifiedRes.rows[0]) {
       await broadcastNotification(
         'broadcast',
-        '🚌 Bus Departing 42 Soon!',
+        'Bus departing 42 soon',
         `A bus is departing 42 toward pickup points in about 1 hour (${trip.time_label || ''}). If you want a ride, be ready! (trip ${trip.id})`
       );
-      console.log(`📢 Broadcast: from_42 trip ${trip.id} departing in 1 hour`);
+      console.log(`Broadcast: from_42 trip ${trip.id} departing in 1 hour`);
     }
   }
 }

@@ -33,7 +33,7 @@ export default function QRScanner({ onScan, onClose }) {
             if (decodedText.startsWith('42bus:')) {
               try {
                 const result = await onScan(decodedText);
-                setSuccess(result?.message || 'Attendance confirmed! ✅');
+                setSuccess(result?.message || 'Attendance confirmed.');
               } catch (err) {
                 setError(err.message || 'Failed to confirm attendance.');
               }

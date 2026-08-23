@@ -270,7 +270,7 @@ router.patch('/trips/:id/status', authenticateToken, requireDriver, async (req, 
       await createNotification(
         b.user_id,
         'trip_confirmed',
-        'Trip Confirmed! ✅',
+        'Trip confirmed',
         `Your ${trip.direction === 'to_42' ? 'Point → 42' : '42 → Point'} trip (${ts?.label || ''}) on ${trip.date} has been confirmed.`
       );
     }
@@ -309,7 +309,7 @@ router.patch('/trips/:id/status', authenticateToken, requireDriver, async (req, 
       await createNotification(
         noShow.user_id,
         'warning',
-        '⚠️ No-Show Warning',
+        'No-show warning',
         warningMsg
       );
     }
